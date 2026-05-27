@@ -278,32 +278,52 @@ function makeWheel(items, value, onChange){
 
   function upd(anim=true){
     const offset=(192/2)-(IH/2)-idx*IH;
-    inn.style.transition=anim?'transform .24s cubic-bezier(.4,0,.2,1)':'none';
+    inn.style.transition=anim?'transform .22s cubic-bezier(.4,0,.2,1)':'none';
     inn.style.transform=`translateY(${offset}px)`;
     inn.querySelectorAll('.wheel-item').forEach((el,i)=>{
       el.className='wheel-item'+(i===idx?' active':'');
     });
   }
+
   items.forEach((item,i)=>{
     const el=h('div',{'class':'wheel-item'+(i===idx?' active':'')},item);
-    el.addEventListener('click',()=>{ if(i===idx)return; idx=i; upd(); onChange(items[idx]); vib(22); });
+    el.addEventListener('click',()=>{
+      if(i===idx)return;
+      idx=i; upd(true); onChange(items[idx]); vib(22);
+    });
     inn.appendChild(el);
   });
-  requestAnimationFrame(()=>upd(false));
+
+  // Hint animation on load — scroll down then back up
+  requestAnimationFrame(()=>{
+    upd(false);
+    setTimeout(()=>{
+      const hintIdx = Math.min(idx+1, items.length-1);
+      const hintOffset = (192/2)-(IH/2)-hintIdx*IH;
+      inn.style.transition='transform .4s cubic-bezier(.4,0,.2,1)';
+      inn.style.transform=`translateY(${hintOffset}px)`;
+      setTimeout(()=>{
+        const backOffset = (192/2)-(IH/2)-idx*IH;
+        inn.style.transition='transform .4s cubic-bezier(.4,0,.2,1)';
+        inn.style.transform=`translateY(${backOffset}px)`;
+      }, 500);
+    }, 400);
+  });
 
   function clamp(n){return Math.max(0,Math.min(items.length-1,n));}
+
   wrap.addEventListener('mousedown',e=>{e.preventDefault();drag=true;sy=e.clientY;si=idx;});
   window.addEventListener('mousemove',e=>{
     if(!drag)return; e.preventDefault();
     const ni=clamp(si+Math.round((sy-e.clientY)/IH));
-    if(ni!==idx){idx=ni;upd();onChange(items[idx]);vib(16);}
+    if(ni!==idx){idx=ni;upd(true);onChange(items[idx]);vib(16);}
   });
   window.addEventListener('mouseup',()=>{drag=false;});
   wrap.addEventListener('touchstart',e=>{sy=e.touches[0].clientY;si=idx;drag=true;},{passive:true});
   wrap.addEventListener('touchmove',e=>{
     if(!drag)return; e.preventDefault();
     const ni=clamp(si+Math.round((sy-e.touches[0].clientY)/IH));
-    if(ni!==idx){idx=ni;upd();onChange(items[idx]);vib(16);}
+    if(ni!==idx){idx=ni;upd(true);onChange(items[idx]);vib(16);}
   },{passive:false});
   wrap.addEventListener('touchend',()=>{drag=false;});
   return wrap;
@@ -723,11 +743,9 @@ function renderAdminLogin(){
 
 // ── LOAD RESPONSES ────────────────────────────────────────────────────────
 function loadResp(){
-  S.loadingResp=true;
+  S.loadingResp=true; render();
   const xhr=new XMLHttpRequest();
-  xhr.open('GET', SB_URL+'/rest/v1/cell_group_responses?select=*&order=submitted_at.desc', true);
-  xhr.setRequestHeader('apikey', SB_KEY);
-  xhr.setRequestHeader('Authorization','Bearer '+SB_KEY);
+  xhr.open('GET','/.netlify/functions/getresponses',true);
   xhr.onreadystatechange=function(){
     if(xhr.readyState!==4)return;
     try{ S.responses=JSON.parse(xhr.responseText); }catch(e){ S.responses=[]; }
