@@ -31,6 +31,7 @@ body{background:var(--navy);font-family:'Segoe UI',system-ui,sans-serif;color:va
 @keyframes fadeU{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 .slide-f{animation:slideF .36s cubic-bezier(.4,0,.2,1)}
 .slide-b{animation:slideB .36s cubic-bezier(.4,0,.2,1)}
+.no-anim{animation:none!important}
 .fade-u{animation:fadeU .32s cubic-bezier(.4,0,.2,1)}
 
 /* Progress — gradient */
@@ -183,7 +184,7 @@ const app = document.getElementById('app');
 
 const S = {
   mode: window.location.search.includes('admin') ? 'adminlogin' : 'survey',
-  step:0, dir:'forward',
+  step:0, dir:'forward', inSelect:false,
   identity:null, name:'', phone:'', showNameForm:false,
   conflictAlert:false, conflictSrc:'',
   q1:'Enjoy it', q1improve:'',
@@ -229,7 +230,9 @@ function render(){
   app.appendChild(c);
 }
 
-function goTo(step, dir='forward'){ S.step=step; S.dir=dir; S.conflictAlert=false; render(); }
+function goTo(step, dir='forward'){ S.step=step; S.dir=dir; S.inSelect=false; S.conflictAlert=false; render(); }
+
+function reselect(fn){ S.inSelect=true; fn(); S.inSelect=false; }
 
 // ── SVG HELPERS ───────────────────────────────────────────────────────────
 function svgCheck(){
@@ -396,7 +399,7 @@ function wrap(content, step){
   const tq=7, qs=step-2;
   const pct = step<=1?0 : step>=10?100 : Math.round((qs/tq)*100);
   const col  = (step>=2&&step<=8) ? QCOL[step-2] : '#7ecfdc';
-  const ac   = S.dir==='forward' ? 'slide-f' : 'slide-b';
+  const ac = S.inSelect ? 'no-anim' : (S.dir==='forward' ? 'slide-f' : 'slide-b');
   const kids = [];
   if(step>=2 && step<10){
     kids.push(h('div',{'class':'progress-wrap'},
@@ -429,28 +432,63 @@ function renderSurvey(){
 
   // IDENTITY
   if(s===1){
-    const ok = S.identity && !(S.identity==='named' && !S.name.trim());
-    const kids = [
+    // name input that updates state and re-evaluates Continue button without full re-render
+    const nameInp = h('input',{type:'text',placeholder:'e.g. Thabo Nkosi',value:S.name});
+    const phoneInp = h('input',{type:'tel',placeholder:'+27 ...',value:S.phone});
+    const continueBtn = h('button',{'class':'btn-primary'},'Continue');
+
+    function updateContinue(){
+      const ok = S.identity && !(S.identity==='named' && !nameInp.value.trim());
+      continueBtn.disabled = !ok;
+    }
+
+    nameInp.addEventListener('input',e=>{S.name=e.target.value; updateContinue();});
+    phoneInp.addEventListener('input',e=>{S.phone=e.target.value;});
+    continueBtn.addEventListener('click',()=>{
+      if(!continueBtn.disabled){vib(28);goTo(2,'forward');}
+    });
+
+    const nameForm = h('div',{'class':'identity-form'},
+      h('label',{},'Your name'), nameInp,
+      h('label',{},'WhatsApp / Phone (optional)'), phoneInp
+    );
+    if(S.identity!=='named') nameForm.style.display='none';
+
+    const namedCard = h('div',{'class':'id-card'+(S.identity==='named'?' selected':'')},
+      h('div',{'class':'id-card-title'},'Share my name'),
+      h('div',{'class':'id-card-sub'},'Leadership can follow up with you personally')
+    );
+    namedCard.addEventListener('click',()=>{
+      vib(22); S.identity='named'; S.showNameForm=true;
+      namedCard.className='id-card selected';
+      anonCard.className='id-card';
+      nameForm.style.display='';
+      updateContinue();
+    });
+
+    const anonCard = h('div',{'class':'id-card'+(S.identity==='anon'?' selected':'')},
+      h('div',{'class':'id-card-title'},'Stay anonymous'),
+      h('div',{'class':'id-card-sub'},'Your responses remain private and unlinked to you')
+    );
+    anonCard.addEventListener('click',()=>{
+      vib(22); S.identity='anon'; S.showNameForm=false; S.name=''; S.phone='';
+      anonCard.className='id-card selected';
+      namedCard.className='id-card';
+      nameForm.style.display='none';
+      continueBtn.disabled=false;
+    });
+
+    updateContinue();
+
+    const kids=[
       h('div',{'class':'q-label'},'Before you begin'),
       h('h2',{},'How would you like to participate?'),
       h('p',{'class':'subtitle'},'Your honesty matters most. Choose what feels comfortable.'),
-      h('div',{'class':'id-choice'},
-        h('div',{'class':'id-card'+(S.identity==='named'?' selected':''),
-          onClick:()=>{vib(22);S.identity='named';S.showNameForm=true;render();}},
-          h('div',{'class':'id-card-title'},'Share my name'),
-          h('div',{'class':'id-card-sub'},'Leadership can follow up with you personally')
-        ),
-        h('div',{'class':'id-card'+(S.identity==='anon'?' selected':''),
-          onClick:()=>{vib(22);S.identity='anon';S.showNameForm=false;S.name='';S.phone='';render();}},
-          h('div',{'class':'id-card-title'},'Stay anonymous'),
-          h('div',{'class':'id-card-sub'},'Your responses remain private and unlinked to you')
-        )
-      )
+      h('div',{'class':'id-choice'}, namedCard, anonCard),
+      nameForm,
+      continueBtn,
+      h('button',{'class':'btn-secondary',onClick:()=>goTo(0,'back')},'Back')
     ];
-    if(S.identity==='named'&&S.showNameForm) kids.push(nameFormEl());
-    kids.push(h('button',{'class':'btn-primary',...(!ok?{disabled:''}:{}),
-      onClick:()=>{if(ok){vib(28);goTo(2,'forward');}}},'Continue'));
-    kids.push(h('button',{'class':'btn-secondary',onClick:()=>goTo(0,'back')},'Back'));
     return wrap(kids,1);
   }
 
@@ -486,7 +524,7 @@ function renderSurvey(){
         const sel=S.q2a===o;
         const btn=h('button',{'class':'opt'+(sel?' selected':'')},
           h('span',{'class':'opt-ring'},sel?svgCheck():''),o);
-        btn.addEventListener('click',()=>{vib(22);S.q2a=o;render();});
+        btn.addEventListener('click',()=>{vib(22);S.q2a=o;reselect(()=>render());});
         return btn;
       }))
     ];
@@ -516,7 +554,7 @@ function renderSurvey(){
           h('div',{'class':'rating-icon'},rIcon(label)),
           h('div',{},h('div',{'class':'rating-label'},label))
         );
-        card.addEventListener('click',()=>{ vib(22); S.q3=label; render(); });
+        card.addEventListener('click',()=>{ vib(22); S.q3=label; reselect(()=>render()); });
         return card;
       }))
     ];
@@ -581,7 +619,7 @@ function renderSurvey(){
         chip.addEventListener('click',()=>{
           vib(22);
           if(S.q5.includes(o)) S.q5=S.q5.filter(x=>x!==o); else S.q5.push(o);
-          render();
+          reselect(()=>render());
         });
         return chip;
       })),
@@ -606,8 +644,8 @@ function renderSurvey(){
       const btn=h('button',{'class':'opt'+(sel?' selected':'')},
         h('span',{'class':'opt-ring'},sel?svgCheck():''),o);
       btn.addEventListener('click',()=>{
-        if(checkConflict('q6',o)){vib(40);S.conflictSrc='q6_'+o;S.conflictAlert=true;render();return;}
-        vib(22); S.q6=o; S.conflictAlert=false; render();
+        if(checkConflict('q6',o)){vib(40);S.conflictSrc='q6_'+o;S.conflictAlert=true;reselect(()=>render());return;}
+        vib(22); S.q6=o; S.conflictAlert=false; reselect(()=>render());
       });
       return btn;
     })));
