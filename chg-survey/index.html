@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>CHG North Cell Group</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --navy:#080d1a;--white:#f0f6ff;--muted:#7a9ab8;
+  --card:rgba(10,15,30,0.80);--radius:20px;
+  --acc:#00d4ff;
+  --btn1:#007a8a;--btn2:#00d4ff;
+}
+html,body{height:100%;width:100%;overflow:hidden}
+body{background:var(--navy);font-family:'Segoe UI',system-ui,sans-serif;color:var(--white)}
+.bg{position:fixed;inset:0;z-index:0;overflow:hidden}
+.orb{position:absolute;border-radius:50%;filter:blur(90px);opacity:.25;animation:drift 14s ease-in-out infinite}
+.orb1{width:420px;height:420px;background:radial-gradient(circle,#002a40,transparent);top:-120px;left:-120px}
+.orb2{width:360px;height:360px;background:radial-gradient(circle,#0d0028,transparent);bottom:-80px;right:-80px;animation-delay:-7s}
+.orb3{width:220px;height:220px;background:radial-gradient(circle,rgba(0,180,220,.08),transparent);top:35%;left:45%;animation-delay:-3.5s}
+@keyframes drift{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(28px,18px) scale(1.08)}}
+#app{position:relative;z-index:1;width:100%;height:100dvh;display:flex;align-items:center;justify-content:center}
+.screen{width:100%;max-width:480px;height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px;overflow-y:auto}
+
+.card{background:var(--card);border:1px solid rgba(255,255,255,0.07);border-top:2px solid var(--acc);border-radius:var(--radius);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);padding:28px 24px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,0.04);transition:border-top-color .6s}
+
+/* Only animate when moving between questions */
+@keyframes slideF{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideB{from{opacity:0;transform:translateX(-32px)}to{opacity:1;transform:translateX(0)}}
+@keyframes fadeU{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.slide-f{animation:slideF .36s cubic-bezier(.4,0,.2,1)}
+.slide-b{animation:slideB .36s cubic-bezier(.4,0,.2,1)}
+.fade-u{animation:fadeU .32s cubic-bezier(.4,0,.2,1)}
+
+/* Progress — gradient */
+.progress-wrap{width:100%;margin-bottom:18px}
+.progress-track{width:100%;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.progress-fill{height:100%;border-radius:2px;transition:width .55s cubic-bezier(.4,0,.2,1)}
+.progress-label{font-size:11px;color:var(--muted);text-align:right;margin-top:5px;letter-spacing:.5px}
+
+h1{font-size:24px;font-weight:700;line-height:1.2;margin-bottom:8px;background:linear-gradient(135deg,var(--white) 40%,#88eeff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+h2{font-size:17px;font-weight:600;line-height:1.45;margin-bottom:6px;color:var(--white)}
+.subtitle{font-size:13px;color:var(--muted);line-height:1.65;margin-bottom:16px}
+.q-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--acc);margin-bottom:7px;opacity:.85;transition:color .6s}
+
+/* All primary buttons same gradient + shadow */
+.btn-primary{
+  width:100%;padding:15px;border-radius:14px;border:none;cursor:pointer;
+  background:linear-gradient(135deg,var(--btn1),var(--btn2));
+  color:#040d18;font-weight:700;font-size:15px;letter-spacing:.3px;
+  box-shadow:0 4px 18px rgba(0,0,0,.45),0 1px 0 rgba(255,255,255,.1) inset;
+  transition:transform .15s,opacity .2s;margin-top:8px;
+}
+.btn-primary:active{transform:scale(.97)}
+.btn-primary:disabled{opacity:.32;cursor:not-allowed}
+.btn-secondary{width:100%;padding:13px;border-radius:14px;border:1px solid rgba(255,255,255,.1);cursor:pointer;background:transparent;color:var(--muted);font-size:14px;transition:all .15s;margin-top:8px}
+.btn-secondary:active{background:rgba(255,255,255,.05);color:var(--white)}
+.nav-row{display:flex;gap:10px;margin-top:8px}
+.nav-row .btn-secondary{flex:1;margin-top:0}
+.nav-row .btn-primary{flex:2;margin-top:0}
+
+/* Options — NO transition animation on select, just colour */
+.options{display:flex;flex-direction:column;gap:9px;margin-bottom:16px}
+.opt{padding:13px 16px;border-radius:13px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.03);cursor:pointer;font-size:14px;color:var(--white);text-align:left;display:flex;align-items:center;gap:12px;width:100%}
+.opt.selected{border-color:var(--sel-border);background:var(--sel-bg)}
+.opt-ring{width:19px;height:19px;border-radius:50%;border:1.5px solid currentColor;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+
+/* Chips */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chip{padding:9px 15px;border-radius:30px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);cursor:pointer;font-size:13px;color:var(--muted)}
+.chip.selected{border-color:var(--sel-border);background:var(--sel-bg);color:var(--white)}
+
+/* Rating cards — NO animation on select */
+.rating-cards{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.rating-card{border:1px solid rgba(255,255,255,.09);border-radius:13px;padding:12px 15px;background:rgba(255,255,255,.03);cursor:pointer;display:flex;align-items:center;gap:12px;width:100%}
+.rating-card.selected{border-color:var(--sel-border);background:var(--sel-bg)}
+.rating-icon{width:32px;height:32px;border-radius:9px;border:1.5px solid rgba(255,255,255,.12);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.rating-card.selected .rating-icon{border-color:var(--sel-border);color:var(--sel-border)}
+.rating-label{font-size:13px;font-weight:600;color:var(--white);text-align:left;line-height:1.3}
+
+/* Wheel */
+.wheel-wrap{width:100%;position:relative;height:192px;margin-bottom:14px;cursor:grab;user-select:none;overflow:hidden}
+.wheel-wrap:active{cursor:grabbing}
+.wheel-fade-top,.wheel-fade-bot{position:absolute;left:0;right:0;height:70px;z-index:2;pointer-events:none}
+.wheel-fade-top{top:0;background:linear-gradient(to bottom,#080d1a 10%,transparent)}
+.wheel-fade-bot{bottom:0;background:linear-gradient(to top,#080d1a 10%,transparent)}
+.wheel-center-box{position:absolute;left:10px;right:10px;top:50%;transform:translateY(-50%);height:48px;border-radius:13px;border:1.5px solid var(--acc);background:rgba(255,255,255,.05);z-index:1;pointer-events:none;transition:border-color .6s}
+.wheel-inner{display:flex;flex-direction:column;align-items:center;will-change:transform}
+.wheel-item{height:48px;display:flex;align-items:center;justify-content:center;font-size:14px;color:rgba(255,255,255,.28);width:100%;text-align:center;padding:0 16px;cursor:pointer}
+.wheel-item.active{color:var(--white);font-weight:600;font-size:16px}
+
+textarea,input[type=text],input[type=tel],input[type=password]{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:13px;padding:13px 15px;color:var(--white);font-size:14px;font-family:inherit;resize:none;outline:none;transition:border-color .2s;margin-bottom:10px}
+textarea:focus,input:focus{border-color:var(--acc)}
+textarea::placeholder,input::placeholder{color:var(--muted)}
+
+.alert{background:rgba(255,200,100,.06);border:1px solid rgba(255,200,100,.25);border-radius:13px;padding:13px 16px;margin-bottom:13px;font-size:13px;line-height:1.65;color:#ffd580}
+.alert strong{display:block;margin-bottom:4px;font-size:14px}
+.alert-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.alert-btn{padding:8px 13px;border-radius:10px;border:1px solid rgba(255,200,100,.3);background:transparent;color:#ffd580;font-size:12px;cursor:pointer}
+.alert-btn.confirm{background:rgba(255,200,100,.1)}
+
+.identity-form{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:13px;padding:15px;margin-bottom:13px}
+.identity-form label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px;margin-top:8px}
+.identity-form label:first-child{margin-top:0}
+
+.logo-wrap{width:70px;height:70px;border-radius:50%;overflow:hidden;margin:0 auto 16px;border:1.5px solid rgba(255,255,255,.15);box-shadow:0 4px 20px rgba(0,0,0,.5)}
+.logo-wrap img{width:100%;height:100%;object-fit:cover}
+.divider{width:38px;height:1.5px;background:linear-gradient(90deg,transparent,var(--acc),transparent);margin:13px auto;transition:background .6s}
+
+.id-choice{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.id-card{border:1px solid rgba(255,255,255,.09);border-radius:15px;padding:16px 18px;background:rgba(255,255,255,.03);cursor:pointer;text-align:left}
+.id-card.selected{border-color:var(--sel-border);background:var(--sel-bg)}
+.id-card-title{font-size:14px;font-weight:600;color:var(--white);margin-bottom:3px}
+.id-card-sub{font-size:13px;color:var(--muted)}
+
+.err{color:#ffaaaa;font-size:13px;margin-bottom:8px;padding:10px 14px;background:rgba(255,80,80,.07);border-radius:10px;border:1px solid rgba(255,80,80,.18);line-height:1.5}
+.hidden{display:none!important}
+
+/* Admin */
+.admin-wrap{position:relative;z-index:1;width:100%;max-width:900px;height:100dvh;overflow-y:auto;padding:24px 20px}
+.admin-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.07)}
+.admin-title{font-size:18px;font-weight:700;color:var(--white)}
+.admin-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.logout-btn{padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);font-size:13px;cursor:pointer}
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.stat-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:14px;text-align:center}
+.stat-num{font-size:26px;font-weight:700;color:var(--acc)}
+.stat-label{font-size:12px;color:var(--muted);margin-top:3px}
+.insights-btn{width:100%;padding:14px;border-radius:13px;border:1.5px solid var(--acc);background:rgba(0,180,220,.07);color:var(--acc);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:16px;letter-spacing:.3px}
+.insights-btn:disabled{opacity:.4;cursor:not-allowed}
+.insights-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:18px;margin-bottom:16px}
+.insights-card h3{font-size:10px;font-weight:600;color:var(--acc);margin-bottom:10px;letter-spacing:1px;text-transform:uppercase}
+.insights-body{font-size:14px;color:var(--white);line-height:1.85;white-space:pre-wrap}
+.sub-list{display:flex;flex-direction:column;gap:8px}
+.sub-item{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:13px;overflow:hidden;cursor:pointer}
+.sub-item:hover{border-color:rgba(0,212,255,.25)}
+.sub-header{padding:13px 15px;display:flex;align-items:center;justify-content:space-between}
+.sub-name{font-size:14px;font-weight:600;color:var(--white)}
+.sub-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.sub-badge{font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid rgba(255,255,255,.1);color:var(--muted)}
+.sub-detail{padding:12px 15px 15px;border-top:1px solid rgba(255,255,255,.06)}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:4px}
+.detail-block{background:rgba(255,255,255,.03);border-radius:9px;padding:9px 11px}
+.detail-block.full{grid-column:1/-1}
+.detail-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px}
+.detail-val{font-size:13px;color:var(--white);line-height:1.5}
+.chevron{transition:transform .25s;display:inline-block}
+.chevron.open{transform:rotate(180deg)}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.09);border-radius:2px}
+</style>
+</head>
+<body>
+<div class="bg"><div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div></div>
+<div id="app"></div>
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────────
+const SB_URL  = 'https://qqikvklpnkfxauwavmj.supabase.co';
+const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxaWt2a2xwbmtmeGF1d2F2dm1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MTgwNzAsImV4cCI6MjA5MzI5NDA3MH0.R1iG33nxvomwTkWeERXncgK7MZ0tOB6bGUG5wD3atj0';
+const ADMIN_PW= 'OT2026surveyCellG';
+const LOGO    = 'https://static.wixstatic.com/media/4877d6_8bbd425ca17a4d6098d3a05add03cd94~mv2.jpg';
+
+// Pastel per-question accent colours
+const QCOL = [
+  '#7ecfdc', // Q1 pastel cyan
+  '#a89de8', // Q2 pastel lavender
+  '#6ecfb0', // Q3 pastel teal
+  '#e8a79d', // Q4 pastel rose
+  '#e8cc9d', // Q5 pastel amber
+  '#b39de8', // Q6 pastel violet
+  '#9dcce8', // Q7 pastel sky
+];
+// Pastel selection colours
+const SEL_BORDER = 'rgba(180,230,255,.55)';
+const SEL_BG     = 'rgba(180,230,255,.08)';
+
+document.documentElement.style.setProperty('--sel-border', SEL_BORDER);
+document.documentElement.style.setProperty('--sel-bg',     SEL_BG);
+
+const app = document.getElementById('app');
+
+const S = {
+  mode: window.location.search.includes('admin') ? 'adminlogin' : 'survey',
+  step:0, dir:'forward',
+  identity:null, name:'', phone:'', showNameForm:false,
+  conflictAlert:false, conflictSrc:'',
+  q1:'Enjoy it', q1improve:'',
+  q2a:null, q2b:'Monthly',
+  q3:null, q3text:'',
+  q4:[], q4other:'',
+  q5:[], q5custom:'',
+  q6:null, q6support:'',
+  q7:'',
+  submitting:false, submitError:'',
+  adminAuthed:false, responses:[], loadingResp:false,
+  insights:'', loadingInsights:false
+};
+
+function vib(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
+
+function h(tag, attrs, ...ch){
+  const el = document.createElement(tag);
+  if(attrs) for(const [k,v] of Object.entries(attrs)){
+    if(k==='class') el.className=v;
+    else if(k==='style') el.style.cssText=v;
+    else if(k.startsWith('on')) el.addEventListener(k.slice(2).toLowerCase(), v);
+    else el.setAttribute(k, v);
+  }
+  for(const c of ch.flat()) if(c!=null&&c!==false)
+    el.appendChild(typeof c==='string' ? document.createTextNode(c) : c);
+  return el;
+}
+
+function setAcc(i){
+  const col = (i>=0&&i<7) ? QCOL[i] : '#7ecfdc';
+  document.documentElement.style.setProperty('--acc', col);
+}
+
+function render(){
+  app.innerHTML = '';
+  const s = S.step;
+  setAcc(s>=2&&s<=8 ? s-2 : -1);
+  let c;
+  if(S.mode==='adminlogin')         c = renderAdminLogin();
+  else if(S.mode==='admin'&&S.adminAuthed) c = renderAdminDash();
+  else                               c = renderSurvey();
+  app.appendChild(c);
+}
+
+function goTo(step, dir='forward'){ S.step=step; S.dir=dir; S.conflictAlert=false; render(); }
+
+// ── SVG HELPERS ───────────────────────────────────────────────────────────
+function svgCheck(){
+  const s=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  s.setAttribute('width','11'); s.setAttribute('height','11'); s.setAttribute('viewBox','0 0 12 12');
+  s.setAttribute('fill','none'); s.setAttribute('stroke','currentColor'); s.setAttribute('stroke-width','2.2');
+  s.setAttribute('stroke-linecap','round'); s.setAttribute('stroke-linejoin','round');
+  const p=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+  p.setAttribute('points','2,6 5,9 10,3'); s.appendChild(p); return s;
+}
+function svgChev(open){
+  const s=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  s.setAttribute('width','16'); s.setAttribute('height','16'); s.setAttribute('viewBox','0 0 16 16');
+  s.setAttribute('fill','none'); s.setAttribute('stroke','currentColor'); s.setAttribute('stroke-width','1.5');
+  s.setAttribute('stroke-linecap','round'); s.className='chevron'+(open?' open':'');
+  const p=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+  p.setAttribute('points','4,6 8,10 12,6'); s.appendChild(p); return s;
+}
+const RICONS={
+  'Very connected and supported':'<circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><polyline points="9,8 11.5,10.5 16,6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  'Connected and growing':'<circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/><polyline points="8,12 11,15 16,9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  'Somewhat connected':'<circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  'I would appreciate more fellowship and support':'<circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="12" y1="8" x2="12" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="16" r=".9" fill="currentColor"/>',
+  'I currently feel disconnected':'<circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="9" y1="9" x2="15" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="15" y1="9" x2="9" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>'
+};
+function rIcon(label){
+  const s=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  s.setAttribute('width','17'); s.setAttribute('height','17'); s.setAttribute('viewBox','0 0 24 24');
+  s.innerHTML=RICONS[label]||''; return s;
+}
+
+// ── WHEEL ─────────────────────────────────────────────────────────────────
+const IH=48;
+function makeWheel(items, value, onChange){
+  let idx=Math.max(0,items.indexOf(value));
+  let drag=false,sy=null,si=0;
+  const wrap=h('div',{'class':'wheel-wrap'});
+  wrap.appendChild(h('div',{'class':'wheel-fade-top'}));
+  wrap.appendChild(h('div',{'class':'wheel-center-box'}));
+  wrap.appendChild(h('div',{'class':'wheel-fade-bot'}));
+  const inn=h('div',{'class':'wheel-inner'});
+  wrap.appendChild(inn);
+
+  function upd(anim=true){
+    const offset=(192/2)-(IH/2)-idx*IH;
+    inn.style.transition=anim?'transform .24s cubic-bezier(.4,0,.2,1)':'none';
+    inn.style.transform=`translateY(${offset}px)`;
+    inn.querySelectorAll('.wheel-item').forEach((el,i)=>{
+      el.className='wheel-item'+(i===idx?' active':'');
+    });
+  }
+  items.forEach((item,i)=>{
+    const el=h('div',{'class':'wheel-item'+(i===idx?' active':'')},item);
+    el.addEventListener('click',()=>{ if(i===idx)return; idx=i; upd(); onChange(items[idx]); vib(22); });
+    inn.appendChild(el);
+  });
+  requestAnimationFrame(()=>upd(false));
+
+  function clamp(n){return Math.max(0,Math.min(items.length-1,n));}
+  wrap.addEventListener('mousedown',e=>{e.preventDefault();drag=true;sy=e.clientY;si=idx;});
+  window.addEventListener('mousemove',e=>{
+    if(!drag)return; e.preventDefault();
+    const ni=clamp(si+Math.round((sy-e.clientY)/IH));
+    if(ni!==idx){idx=ni;upd();onChange(items[idx]);vib(16);}
+  });
+  window.addEventListener('mouseup',()=>{drag=false;});
+  wrap.addEventListener('touchstart',e=>{sy=e.touches[0].clientY;si=idx;drag=true;},{passive:true});
+  wrap.addEventListener('touchmove',e=>{
+    if(!drag)return; e.preventDefault();
+    const ni=clamp(si+Math.round((sy-e.touches[0].clientY)/IH));
+    if(ni!==idx){idx=ni;upd();onChange(items[idx]);vib(16);}
+  },{passive:false});
+  wrap.addEventListener('touchend',()=>{drag=false;});
+  return wrap;
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────
+function logo(){ return h('div',{'class':'logo-wrap'},h('img',{src:LOGO,alt:'CHG'})); }
+
+function conflictEl(){
+  return h('div',{'class':'alert'},
+    h('strong',{},'Please note'),
+    'It looks like you would like to get involved or receive support. Leadership would love to connect with you personally. Would you like to share your name so they can reach out?',
+    h('div',{'class':'alert-actions'},
+      h('button',{'class':'alert-btn confirm',onClick:doShareName},'Yes, add my name'),
+      h('button',{'class':'alert-btn',onClick:doKeepAnon},'Keep me anonymous')
+    )
+  );
+}
+function nameFormEl(){
+  return h('div',{'class':'identity-form'},
+    h('label',{},'Your name'),
+    Object.assign(h('input',{type:'text',placeholder:'e.g. Thabo Nkosi',value:S.name}),
+      {oninput:e=>{S.name=e.target.value;}}),
+    h('label',{},'WhatsApp / Phone (optional)'),
+    Object.assign(h('input',{type:'tel',placeholder:'+27 ...',value:S.phone}),
+      {oninput:e=>{S.phone=e.target.value;}})
+  );
+}
+function doShareName(){
+  S.identity='named'; S.showNameForm=true; S.conflictAlert=false; applyConflict(); render();
+}
+function doKeepAnon(){ S.conflictAlert=false; applyConflict(); render(); }
+function applyConflict(){
+  if(S.conflictSrc.startsWith('q4_')){
+    const v=S.conflictSrc.replace('q4_','');
+    if(!S.q4.includes(v)) S.q4.push(v); else S.q4=S.q4.filter(x=>x!==v);
+  }
+  if(S.conflictSrc.startsWith('q6_')) S.q6=S.conflictSrc.replace('q6_','');
+}
+function checkConflict(src,val){
+  if(S.identity!=='anon') return false;
+  if(src==='q4'&&['Hosting','Sharing the word','Worship','Teaching','Outreach activities'].includes(val)&&!S.q4.includes(val)) return true;
+  if(src==='q6'&&['Yes','Occasionally'].includes(val)) return true;
+  return false;
+}
+
+// ── SUBMIT via Netlify function ───────────────────────────────────────────
+async function submitForm(){
+  S.submitting=true; S.submitError=''; render();
+  const payload = {
+    identity_type:    S.identity,
+    respondent_name:  S.identity==='named' ? (S.name||null) : null,
+    respondent_phone: S.identity==='named' ? (S.phone||null): null,
+    q1_presabbath:    S.q1,
+    q1_improvement:   S.q1improve  || null,
+    q2a_physical:     S.q2a,
+    q2b_frequency:    S.q2a!=='No' ? S.q2b : null,
+    q3_structure:     S.q3,
+    q3_text:          S.q3text    || null,
+    q4_participation: S.q4,
+    q4_other:         S.q4other   || null,
+    q5_ideas:         S.q5,
+    q5_custom:        S.q5custom  || null,
+    q6_pastoral:      S.q6,
+    q6_support_note:  S.q6support || null,
+    q7_reflection:    S.q7        || null,
+    submitted_at:     new Date().toISOString(),
+    device:           /mobile|android|iphone|ipad/i.test(navigator.userAgent)?'mobile':'desktop'
+  };
+  try {
+    const res = await fetch('/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    S.submitting = false;
+    if(res.ok){
+      vib([50,30,50]); goTo(10,'forward');
+    } else {
+      const t = await res.text().catch(()=>'');
+      S.submitError = 'Error ' + res.status + ': ' + t;
+      render();
+    }
+  } catch(e){
+    S.submitting = false;
+    S.submitError = 'Error: ' + e.message;
+    render();
+  }
+}
+
+// ── SCREEN WRAPPER ────────────────────────────────────────────────────────
+function wrap(content, step){
+  const tq=7, qs=step-2;
+  const pct = step<=1?0 : step>=10?100 : Math.round((qs/tq)*100);
+  const col  = (step>=2&&step<=8) ? QCOL[step-2] : '#7ecfdc';
+  const ac   = S.dir==='forward' ? 'slide-f' : 'slide-b';
+  const kids = [];
+  if(step>=2 && step<10){
+    kids.push(h('div',{'class':'progress-wrap'},
+      h('div',{'class':'progress-track'},
+        h('div',{'class':'progress-fill','style':`width:${pct}%;background:linear-gradient(90deg,rgba(0,120,140,.7),${col})`})
+      ),
+      h('div',{'class':'progress-label'}, qs + ' of ' + tq)
+    ));
+  }
+  kids.push(h('div',{'class':'card '+ac}, ...content));
+  return h('div',{'class':'screen'}, ...kids);
+}
+
+// ── SURVEY SCREENS ────────────────────────────────────────────────────────
+function renderSurvey(){
+  const s = S.step;
+
+  // WELCOME
+  if(s===0) return wrap([
+    logo(),
+    h('h1',{'style':'text-align:center'},'North Cell Group'),
+    h('p',{'style':'font-size:11px;letter-spacing:2px;color:var(--acc);text-transform:uppercase;margin-bottom:8px;text-align:center'},'Church of the Holy Ghost'),
+    h('div',{'class':'divider'}),
+    h('p',{'class':'subtitle','style':'text-align:center;margin-bottom:20px'},
+      'Help us build a stronger and more connected fellowship. Your feedback guides improvements to Pre Sabbath gatherings and strengthens our community.'),
+    h('button',{'class':'btn-primary',onClick:()=>goTo(1,'forward')},'Start Survey'),
+    h('button',{'class':'btn-secondary','style':'margin-top:8px;font-size:12px;opacity:.35',
+      onClick:()=>{S.mode='adminlogin';render();}},'Admin')
+  ], 0);
+
+  // IDENTITY
+  if(s===1){
+    const ok = S.identity && !(S.identity==='named' && !S.name.trim());
+    const kids = [
+      h('div',{'class':'q-label'},'Before you begin'),
+      h('h2',{},'How would you like to participate?'),
+      h('p',{'class':'subtitle'},'Your honesty matters most. Choose what feels comfortable.'),
+      h('div',{'class':'id-choice'},
+        h('div',{'class':'id-card'+(S.identity==='named'?' selected':''),
+          onClick:()=>{vib(22);S.identity='named';S.showNameForm=true;render();}},
+          h('div',{'class':'id-card-title'},'Share my name'),
+          h('div',{'class':'id-card-sub'},'Leadership can follow up with you personally')
+        ),
+        h('div',{'class':'id-card'+(S.identity==='anon'?' selected':''),
+          onClick:()=>{vib(22);S.identity='anon';S.showNameForm=false;S.name='';S.phone='';render();}},
+          h('div',{'class':'id-card-title'},'Stay anonymous'),
+          h('div',{'class':'id-card-sub'},'Your responses remain private and unlinked to you')
+        )
+      )
+    ];
+    if(S.identity==='named'&&S.showNameForm) kids.push(nameFormEl());
+    kids.push(h('button',{'class':'btn-primary',...(!ok?{disabled:''}:{}),
+      onClick:()=>{if(ok){vib(28);goTo(2,'forward');}}},'Continue'));
+    kids.push(h('button',{'class':'btn-secondary',onClick:()=>goTo(0,'back')},'Back'));
+    return wrap(kids,1);
+  }
+
+  // Q1
+  if(s===2){
+    const kids=[
+      h('div',{'class':'q-label'},'Question 1 of 7'),
+      h('h2',{},'How do you feel about the weekly online Pre Sabbath gatherings?'),
+      h('p',{'class':'subtitle'},'Scroll or drag to select'),
+      makeWheel(
+        ['Love it','Enjoy it','Neutral',"I didn't know we had them",'Needs improvement'],
+        S.q1,
+        v=>{ S.q1=v; render(); }
+      )
+    ];
+    if(S.q1==='Needs improvement'){
+      const ta=h('textarea',{rows:'3',placeholder:'What improvement would you like to see?'},S.q1improve||'');
+      ta.addEventListener('input',e=>{S.q1improve=e.target.value;});
+      kids.push(ta);
+    }
+    kids.push(h('button',{'class':'btn-primary',onClick:()=>{vib(28);goTo(3,'forward');}},'Next'));
+    kids.push(h('button',{'class':'btn-secondary',onClick:()=>goTo(1,'back')},'Back'));
+    return wrap(kids,2);
+  }
+
+  // Q2
+  if(s===3){
+    const kids=[
+      h('div',{'class':'q-label'},'Question 2 of 7'),
+      h('h2',{},'Would you like occasional in-person Pre Sabbath gatherings?'),
+      h('p',{'class':'subtitle'},'Tap to select'),
+      h('div',{'class':'options'},...['Yes','No','Sometimes'].map(o=>{
+        const sel=S.q2a===o;
+        const btn=h('button',{'class':'opt'+(sel?' selected':'')},
+          h('span',{'class':'opt-ring'},sel?svgCheck():''),o);
+        btn.addEventListener('click',()=>{vib(22);S.q2a=o;render();});
+        return btn;
+      }))
+    ];
+    if(S.q2a&&S.q2a!=='No'){
+      kids.push(h('p',{'style':'font-size:13px;color:var(--muted);margin-bottom:10px'},'How often would you prefer physical gatherings?'));
+      kids.push(makeWheel(['Monthly','Every 2 months','Quarterly','Special occasions only'],S.q2b,v=>{S.q2b=v;}));
+    }
+    kids.push(h('div',{'class':'nav-row'},
+      h('button',{'class':'btn-secondary',onClick:()=>goTo(2,'back')},'Back'),
+      h('button',{'class':'btn-primary',...(!S.q2a?{disabled:''}:{}),
+        onClick:()=>{if(S.q2a){vib(28);goTo(4,'forward');}}},'Next')
+    ));
+    return wrap(kids,3);
+  }
+
+  // Q3
+  if(s===4){
+    const kids=[
+      h('div',{'class':'q-label'},'Question 3 of 7'),
+      h('h2',{},'How connected, spiritually encouraged, and supported do you currently feel within the North Cell Group fellowship?'),
+      h('p',{'class':'subtitle'},'Tap to select'),
+      h('div',{'class':'rating-cards'},...[
+        'Very connected and supported','Connected and growing','Somewhat connected',
+        'I would appreciate more fellowship and support','I currently feel disconnected'
+      ].map(label=>{
+        const card=h('button',{'class':'rating-card'+(S.q3===label?' selected':'')},
+          h('div',{'class':'rating-icon'},rIcon(label)),
+          h('div',{},h('div',{'class':'rating-label'},label))
+        );
+        card.addEventListener('click',()=>{ vib(22); S.q3=label; render(); });
+        return card;
+      }))
+    ];
+    if(S.q3){
+      const ta=h('textarea',{rows:'3',placeholder:'What would help you feel more connected and supported within the cell group? (optional)'},S.q3text||'');
+      ta.addEventListener('input',e=>{S.q3text=e.target.value;});
+      kids.push(ta);
+    }
+    kids.push(h('div',{'class':'nav-row'},
+      h('button',{'class':'btn-secondary',onClick:()=>goTo(3,'back')},'Back'),
+      h('button',{'class':'btn-primary',...(!S.q3?{disabled:''}:{}),
+        onClick:()=>{if(S.q3){vib(28);goTo(5,'forward');}}},'Next')
+    ));
+    return wrap(kids,4);
+  }
+
+  // Q4
+  if(s===5){
+    const kids=[];
+    if(S.conflictAlert) kids.push(conflictEl());
+    if(S.showNameForm&&S.identity==='named') kids.push(nameFormEl());
+    kids.push(h('div',{'class':'q-label'},'Question 4 of 7'));
+    kids.push(h('h2',{},'Would you be interested in participating more actively within the cell group?'));
+    kids.push(h('p',{'class':'subtitle'},'Select all that apply'));
+    kids.push(h('div',{'class':'chips'},...[
+      'Hosting','Sharing the word','Worship','Teaching','Outreach activities','Not at the moment'
+    ].map(o=>{
+      const chip=h('button',{'class':'chip'+(S.q4.includes(o)?' selected':'')},o);
+      chip.addEventListener('click',()=>{
+        if(checkConflict('q4',o)){vib(40);S.conflictSrc='q4_'+o;S.conflictAlert=true;render();return;}
+        vib(22);
+        if(S.q4.includes(o)) S.q4=S.q4.filter(x=>x!==o); else S.q4.push(o);
+        render();
+      });
+      return chip;
+    })));
+    const ota=h('textarea',{rows:'2',placeholder:'Other — please specify...'},S.q4other||'');
+    ota.addEventListener('input',e=>{S.q4other=e.target.value;});
+    kids.push(ota);
+    const canNext=S.q4.length>0||S.q4other.trim().length>0;
+    kids.push(h('div',{'class':'nav-row'},
+      h('button',{'class':'btn-secondary',onClick:()=>goTo(4,'back')},'Back'),
+      h('button',{'class':'btn-primary',...(!canNext?{disabled:''}:{}),
+        onClick:()=>{if(canNext){vib(28);goTo(6,'forward');}}},'Next')
+    ));
+    return wrap(kids,5);
+  }
+
+  // Q5
+  if(s===6){
+    const ta=h('textarea',{rows:'2',placeholder:'Additional suggestions...'},S.q5custom||'');
+    ta.addEventListener('input',e=>{S.q5custom=e.target.value;});
+    return wrap([
+      h('div',{'class':'q-label'},'Question 5 of 7'),
+      h('h2',{},'What activities or improvements would you like to see within the North Cell Group?'),
+      h('p',{'class':'subtitle'},'Select all that apply, or add your own below'),
+      h('div',{'class':'chips'},...[
+        'Fellowship events','Prayer Sunday mornings','Bible study sessions',
+        'Youth activities','Family gatherings','Outreach programmes'
+      ].map(o=>{
+        const chip=h('button',{'class':'chip'+(S.q5.includes(o)?' selected':'')},o);
+        chip.addEventListener('click',()=>{
+          vib(22);
+          if(S.q5.includes(o)) S.q5=S.q5.filter(x=>x!==o); else S.q5.push(o);
+          render();
+        });
+        return chip;
+      })),
+      ta,
+      h('div',{'class':'nav-row'},
+        h('button',{'class':'btn-secondary',onClick:()=>goTo(5,'back')},'Back'),
+        h('button',{'class':'btn-primary',onClick:()=>{vib(28);goTo(7,'forward');}},'Next')
+      )
+    ], 6);
+  }
+
+  // Q6
+  if(s===7){
+    const kids=[];
+    if(S.conflictAlert) kids.push(conflictEl());
+    if(S.showNameForm&&S.identity==='named') kids.push(nameFormEl());
+    kids.push(h('div',{'class':'q-label'},'Question 6 of 7'));
+    kids.push(h('h2',{},'Would you appreciate more frequent home visits or pastoral support from leadership?'));
+    kids.push(h('p',{'class':'subtitle'},'Tap to select'));
+    kids.push(h('div',{'class':'options'},...['Yes','Occasionally','No'].map(o=>{
+      const sel=S.q6===o;
+      const btn=h('button',{'class':'opt'+(sel?' selected':'')},
+        h('span',{'class':'opt-ring'},sel?svgCheck():''),o);
+      btn.addEventListener('click',()=>{
+        if(checkConflict('q6',o)){vib(40);S.conflictSrc='q6_'+o;S.conflictAlert=true;render();return;}
+        vib(22); S.q6=o; S.conflictAlert=false; render();
+      });
+      return btn;
+    })));
+    if(S.q6&&S.q6!=='No'){
+      const ta=h('textarea',{rows:'3',placeholder:'How can leadership better support you? (optional)'},S.q6support||'');
+      ta.addEventListener('input',e=>{S.q6support=e.target.value;});
+      kids.push(ta);
+    }
+    kids.push(h('div',{'class':'nav-row'},
+      h('button',{'class':'btn-secondary',onClick:()=>goTo(6,'back')},'Back'),
+      h('button',{'class':'btn-primary',...(!S.q6?{disabled:''}:{}),
+        onClick:()=>{if(S.q6){vib(28);goTo(8,'forward');}}},'Next')
+    ));
+    return wrap(kids,7);
+  }
+
+  // Q7 — SUBMIT IS HERE
+  if(s===8){
+    const ta=h('textarea',{rows:'6',placeholder:'Share your thoughts freely...'},S.q7||'');
+    ta.addEventListener('input',e=>{S.q7=e.target.value;});
+    const kids=[
+      h('div',{'class':'q-label'},'Question 7 of 7'),
+      h('h2',{},'What is one thing you would love to improve or strengthen within the North Cell Group community?'),
+      h('p',{'class':'subtitle'},'Every voice is valued — share your heart'),
+      ta
+    ];
+    if(S.submitError) kids.push(h('p',{'class':'err'},S.submitError));
+    kids.push(h('div',{'class':'nav-row'},
+      h('button',{'class':'btn-secondary',onClick:()=>goTo(7,'back')},'Back'),
+      h('button',{'class':'btn-primary',...(S.submitting?{disabled:''}:{}),
+        onClick:submitForm}, S.submitting?'Submitting...':'Submit')
+    ));
+    return wrap(kids,8);
+  }
+
+  // THANK YOU
+  if(s===10) return wrap([
+    logo(),
+    h('h1',{'style':'text-align:center'},'Thank you'+(S.name?' '+S.name.split(' ')[0]:'')),
+    h('div',{'class':'divider'}),
+    h('p',{'class':'subtitle','style':'text-align:center'},
+      'Your voice matters deeply to the North Cell Group. Leadership will carefully review all feedback and use it to build a stronger, more connected fellowship community.'),
+    h('p',{'style':'font-size:11px;color:var(--acc);margin-top:14px;letter-spacing:1.5px;text-transform:uppercase;text-align:center'},
+      'Church of the Holy Ghost · All responses are confidential')
+  ], 10);
+
+  return h('div',{});
+}
+
+// ── ADMIN LOGIN ───────────────────────────────────────────────────────────
+function renderAdminLogin(){
+  let pw='';
+  const errEl=h('p',{'class':'err hidden'},'');
+  const inp=h('input',{type:'password',placeholder:'Enter admin password'});
+  inp.addEventListener('input',e=>{pw=e.target.value;});
+  function attempt(){
+    if(pw===ADMIN_PW){ S.adminAuthed=true; S.mode='admin'; loadResp(); render(); }
+    else{ errEl.textContent='Incorrect password. Please try again.'; errEl.className='err'; pw=''; inp.value=''; }
+  }
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter')attempt();});
+  return h('div',{'class':'screen'},
+    h('div',{'class':'card fade-u','style':'max-width:380px;width:100%'},
+      logo(),
+      h('div',{'style':'text-align:center;margin-bottom:20px'},
+        h('div',{'class':'q-label','style':'text-align:center'},'Admin Access'),
+        h('h2',{'style':'text-align:center'},'Dashboard Login'),
+        h('p',{'class':'subtitle','style':'text-align:center;margin-bottom:0'},'North Cell Group Survey')
+      ),
+      h('label',{'style':'font-size:12px;color:var(--muted);display:block;margin-bottom:6px'},'Password'),
+      inp, errEl,
+      h('button',{'class':'btn-primary',onClick:attempt},'Enter Dashboard')
+    )
+  );
+}
+
+// ── LOAD RESPONSES ────────────────────────────────────────────────────────
+function loadResp(){
+  S.loadingResp=true;
+  const xhr=new XMLHttpRequest();
+  xhr.open('GET', SB_URL+'/rest/v1/cell_group_responses?select=*&order=submitted_at.desc', true);
+  xhr.setRequestHeader('apikey', SB_KEY);
+  xhr.setRequestHeader('Authorization','Bearer '+SB_KEY);
+  xhr.onreadystatechange=function(){
+    if(xhr.readyState!==4)return;
+    try{ S.responses=JSON.parse(xhr.responseText); }catch(e){ S.responses=[]; }
+    S.loadingResp=false; render();
+  };
+  xhr.onerror=function(){ S.responses=[]; S.loadingResp=false; render(); };
+  xhr.send();
+}
+
+// ── AI INSIGHTS ───────────────────────────────────────────────────────────
+function genInsights(){
+  if(!S.responses.length)return;
+  S.loadingInsights=true; S.insights=''; render();
+  const sum=S.responses.map((r,i)=>`
+Response ${i+1} [${r.identity_type==='named'?r.respondent_name:'Anonymous'}]:
+- Pre Sabbath feeling: ${r.q1_presabbath}${r.q1_improvement?`, improvement: "${r.q1_improvement}"`:''}
+- Physical gatherings: ${r.q2a_physical}${r.q2b_frequency&&r.q2a_physical!=='No'?`, frequency: ${r.q2b_frequency}`:''}
+- Connection & support: ${r.q3_structure}${r.q3_text?`, note: "${r.q3_text}"`:''}
+- Participation: ${(r.q4_participation||[]).join(', ')||'none'}${r.q4_other?`, other: "${r.q4_other}"`:''}
+- Activity ideas: ${[...(r.q5_ideas||[]),r.q5_custom].filter(Boolean).join(', ')||'none'}
+- Pastoral support: ${r.q6_pastoral}${r.q6_support_note?`, note: "${r.q6_support_note}"`:''}
+- Final reflection: ${r.q7_reflection||'none'}
+`).join('\n---\n');
+  const xhr=new XMLHttpRequest();
+  xhr.open('POST','https://api.anthropic.com/v1/messages',true);
+  xhr.setRequestHeader('Content-Type','application/json');
+  xhr.onreadystatechange=function(){
+    if(xhr.readyState!==4)return;
+    try{
+      const d=JSON.parse(xhr.responseText);
+      S.insights=d.content?.find(b=>b.type==='text')?.text||'No insights returned.';
+    }catch(e){ S.insights='Unable to parse response.'; }
+    S.loadingInsights=false; render();
+  };
+  xhr.onerror=function(){ S.insights='Unable to generate insights. Please try again.'; S.loadingInsights=false; render(); };
+  xhr.send(JSON.stringify({
+    model:'claude-sonnet-4-20250514', max_tokens:1000,
+    system:'You are an insightful community analyst for the Church of the Holy Ghost, North Cell Group. Analyse the survey responses and return a structured, warm, and actionable report. Use clear sections with headings. Do not use emojis. Write in a professional but pastoral tone. Cover: overall sentiment, key themes, connection and support needs, participation interests, leadership recommendations, and notable reflections from open-text responses.',
+    messages:[{role:'user',content:`Here are ${S.responses.length} survey responses:\n\n${sum}\n\nPlease provide a structured insights report.`}]
+  }));
+}
+
+// ── ADMIN DASHBOARD ───────────────────────────────────────────────────────
+function renderAdminDash(){
+  const named=S.responses.filter(r=>r.identity_type==='named').length;
+  const anon =S.responses.filter(r=>r.identity_type==='anon').length;
+  const kids=[
+    h('div',{'class':'admin-header'},
+      h('div',{},
+        h('div',{'class':'admin-title'},'Response Dashboard'),
+        h('div',{'class':'admin-sub'},'Church of the Holy Ghost · North Cell Group')
+      ),
+      h('button',{'class':'logout-btn',
+        onClick:()=>{S.adminAuthed=false;S.mode='adminlogin';render();}},'Sign out')
+    ),
+    h('div',{'class':'stats-row'},
+      h('div',{'class':'stat-card'},h('div',{'class':'stat-num'},String(S.responses.length)),h('div',{'class':'stat-label'},'Total Responses')),
+      h('div',{'class':'stat-card'},h('div',{'class':'stat-num'},String(named)),h('div',{'class':'stat-label'},'Named')),
+      h('div',{'class':'stat-card'},h('div',{'class':'stat-num'},String(anon)), h('div',{'class':'stat-label'},'Anonymous'))
+    ),
+    h('button',{'class':'insights-btn',
+      ...(S.loadingInsights||!S.responses.length?{disabled:''}:{}),
+      onClick:genInsights},
+      S.loadingInsights?'Generating insights...':'Generate AI Insights'
+    )
+  ];
+  if(S.insights) kids.push(
+    h('div',{'class':'insights-card fade-u'},
+      h('h3',{},'AI Insights Report'),
+      h('div',{'class':'insights-body'},S.insights)
+    )
+  );
+  if(S.loadingResp){
+    kids.push(h('p',{'style':'color:var(--muted);font-size:14px;text-align:center;padding:20px'},'Loading responses...'));
+  } else if(!S.responses.length){
+    kids.push(h('p',{'style':'color:var(--muted);font-size:14px;text-align:center;padding:20px'},'No responses submitted yet.'));
+  } else {
+    const list=h('div',{'class':'sub-list'});
+    S.responses.forEach(r=>{
+      const d=new Date(r.submitted_at);
+      const date=d.toLocaleDateString('en-ZA',{day:'2-digit',month:'short',year:'numeric'});
+      const time=d.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'});
+      let open=false;
+      const blocks=[];
+      blocks.push(h('div',{'class':'detail-block'},h('div',{'class':'detail-label'},'Pre Sabbath'),h('div',{'class':'detail-val'},r.q1_presabbath||'—')));
+      blocks.push(h('div',{'class':'detail-block'},h('div',{'class':'detail-label'},'Physical Gatherings'),h('div',{'class':'detail-val'},(r.q2a_physical||'—')+(r.q2b_frequency&&r.q2a_physical!=='No'?' · '+r.q2b_frequency:''))));
+      blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Connection & Support'),h('div',{'class':'detail-val'},r.q3_structure||'—')));
+      blocks.push(h('div',{'class':'detail-block'},h('div',{'class':'detail-label'},'Pastoral Support'),h('div',{'class':'detail-val'},r.q6_pastoral||'—')));
+      if(r.q4_participation?.length||r.q4_other) blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Participation'),h('div',{'class':'detail-val'},[...(r.q4_participation||[]),r.q4_other].filter(Boolean).join(', '))));
+      if(r.q5_ideas?.length||r.q5_custom) blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Activity Ideas'),h('div',{'class':'detail-val'},[...(r.q5_ideas||[]),r.q5_custom].filter(Boolean).join(', '))));
+      if(r.q1_improvement) blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Improvement Note'),h('div',{'class':'detail-val'},r.q1_improvement)));
+      if(r.q3_text) blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Connection Note'),h('div',{'class':'detail-val'},r.q3_text)));
+      if(r.q6_support_note) blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Support Note'),h('div',{'class':'detail-val'},r.q6_support_note)));
+      if(r.q7_reflection) blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Final Reflection'),h('div',{'class':'detail-val'},r.q7_reflection)));
+      const det=h('div',{'class':'sub-detail hidden'},h('div',{'class':'detail-grid'},...blocks));
+      if(r.respondent_phone){ const ph=h('div',{'style':'margin-bottom:8px;font-size:13px;color:var(--muted)'},'Contact: ',h('span',{'style':'color:var(--white)'},r.respondent_phone)); det.insertBefore(ph,det.firstChild); }
+      const chev=svgChev(false);
+      const hdr=h('div',{'class':'sub-header'},
+        h('div',{},
+          h('div',{'class':'sub-name'},r.identity_type==='named'&&r.respondent_name?r.respondent_name:'Anonymous'),
+          h('div',{'class':'sub-meta'},date+' at '+time+' · '+(r.device||'unknown'))
+        ),
+        h('div',{'style':'display:flex;align-items:center;gap:10px'},
+          h('span',{'class':'sub-badge'},r.identity_type==='named'?'Named':'Anon'),
+          chev
+        )
+      );
+      hdr.addEventListener('click',()=>{
+        open=!open;
+        det.className=open?'sub-detail fade-u':'sub-detail hidden';
+        chev.className='chevron'+(open?' open':'');
+      });
+      list.appendChild(h('div',{'class':'sub-item'},hdr,det));
+    });
+    kids.push(list);
+  }
+  return h('div',{'class':'admin-wrap'},...kids);
+}
+
+render();
+</script>
+</body>
+</html>
