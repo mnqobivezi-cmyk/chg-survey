@@ -5,8 +5,8 @@ exports.handler = async function(event) {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  const SB_URL = 'https://qqikvklpnkfxauwavmj.supabase.co';
-  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxaWt2a2xwbmtmeGF1d2F2dm1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MTgwNzAsImV4cCI6MjA5MzI5NDA3MH0.R1iG33nxvomwTkWeERXncgK7MZ0tOB6bGUG5wD3atj0';
+  const SB_URL = 'https://hozytvscjvnjlmzxphgk.supabase.co';
+  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhvenl0dnNjanZuamxtenhwaGdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5MDY2NjksImV4cCI6MjA5NTQ4MjY2OX0.6iOdeWP3HylsqwGYuuChe8pA99PnLz7mcTXB-f9234k';
 
   try {
     const response = await fetch(SB_URL + '/rest/v1/cell_group_responses', {
