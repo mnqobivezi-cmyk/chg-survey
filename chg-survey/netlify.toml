@@ -6,3 +6,17 @@
   to = "/.netlify/functions/submit"
   status = 200
   force = true
+
+[[redirects]]
+  from = "/api/getresponses"
+  to = "/.netlify/functions/getresponses"
+  status = 200
+  force = true
+[build]
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/submit"
+  to = "/.netlify/functions/submit"
+  status = 200
+  force = true
