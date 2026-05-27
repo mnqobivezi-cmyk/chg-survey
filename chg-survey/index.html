@@ -31,7 +31,7 @@ body{background:var(--navy);font-family:'Segoe UI',system-ui,sans-serif;color:va
 @keyframes fadeU{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 .slide-f{animation:slideF .36s cubic-bezier(.4,0,.2,1)}
 .slide-b{animation:slideB .36s cubic-bezier(.4,0,.2,1)}
-.no-anim{animation:none!important}
+.no-anim{animation:none!important;transition:none!important}
 .fade-u{animation:fadeU .32s cubic-bezier(.4,0,.2,1)}
 
 /* Progress — gradient */
@@ -276,9 +276,11 @@ function makeWheel(items, value, onChange){
   const inn=h('div',{'class':'wheel-inner'});
   wrap.appendChild(inn);
 
-  function upd(anim=true){
+  // position wheel — animateDrag=true only when finger/mouse is dragging
+  function upd(animateDrag){
     const offset=(192/2)-(IH/2)-idx*IH;
-    inn.style.transition=anim?'transform .22s cubic-bezier(.4,0,.2,1)':'none';
+    // only animate during physical drag, never on tap/click/render
+    inn.style.transition = animateDrag ? 'transform .18s cubic-bezier(.4,0,.2,1)' : 'none';
     inn.style.transform=`translateY(${offset}px)`;
     inn.querySelectorAll('.wheel-item').forEach((el,i)=>{
       el.className='wheel-item'+(i===idx?' active':'');
@@ -287,27 +289,26 @@ function makeWheel(items, value, onChange){
 
   items.forEach((item,i)=>{
     const el=h('div',{'class':'wheel-item'+(i===idx?' active':'')},item);
+    // click: snap instantly, haptic only — no visual animation
     el.addEventListener('click',()=>{
       if(i===idx)return;
-      idx=i; upd(true); onChange(items[idx]); vib(22);
+      idx=i; upd(false); onChange(items[idx]); vib(22);
     });
     inn.appendChild(el);
   });
 
-  // Hint animation on load — scroll down then back up
+  // hint animation on first render — nudge down then back
   requestAnimationFrame(()=>{
     upd(false);
     setTimeout(()=>{
-      const hintIdx = Math.min(idx+1, items.length-1);
-      const hintOffset = (192/2)-(IH/2)-hintIdx*IH;
-      inn.style.transition='transform .4s cubic-bezier(.4,0,.2,1)';
-      inn.style.transform=`translateY(${hintOffset}px)`;
+      const hi=Math.min(idx+1,items.length-1);
+      inn.style.transition='transform .45s cubic-bezier(.4,0,.2,1)';
+      inn.style.transform=`translateY(${(192/2)-(IH/2)-hi*IH}px)`;
       setTimeout(()=>{
-        const backOffset = (192/2)-(IH/2)-idx*IH;
-        inn.style.transition='transform .4s cubic-bezier(.4,0,.2,1)';
-        inn.style.transform=`translateY(${backOffset}px)`;
-      }, 500);
-    }, 400);
+        inn.style.transition='transform .45s cubic-bezier(.4,0,.2,1)';
+        inn.style.transform=`translateY(${(192/2)-(IH/2)-idx*IH}px)`;
+      },520);
+    },450);
   });
 
   function clamp(n){return Math.max(0,Math.min(items.length-1,n));}
@@ -741,14 +742,16 @@ function renderAdminLogin(){
   );
 }
 
-// ── LOAD RESPONSES ────────────────────────────────────────────────────────
 function loadResp(){
   S.loadingResp=true; render();
   const xhr=new XMLHttpRequest();
   xhr.open('GET','/.netlify/functions/getresponses',true);
   xhr.onreadystatechange=function(){
     if(xhr.readyState!==4)return;
-    try{ S.responses=JSON.parse(xhr.responseText); }catch(e){ S.responses=[]; }
+    try{
+      const data=JSON.parse(xhr.responseText);
+      S.responses=Array.isArray(data)?data:[];
+    }catch(e){ S.responses=[]; }
     S.loadingResp=false; render();
   };
   xhr.onerror=function(){ S.responses=[]; S.loadingResp=false; render(); };
