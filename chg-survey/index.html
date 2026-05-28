@@ -750,7 +750,11 @@ function renderAdminLogin(){
   const inp=h('input',{type:'password',placeholder:'Enter admin password'});
   inp.addEventListener('input',e=>{pw=e.target.value;});
   function attempt(){
-    if(pw===ADMIN_PW){ S.adminAuthed=true; S.mode='admin'; loadResp(); render(); }
+    if(pw===ADMIN_PW){
+      S.adminAuthed=true; S.mode='admin';
+      sessionStorage.setItem('adminAuthed','true');
+      loadResp(); render();
+    }
     else{ errEl.textContent='Incorrect password. Please try again.'; errEl.className='err'; pw=''; inp.value=''; }
   }
   inp.addEventListener('keydown',e=>{if(e.key==='Enter')attempt();});
@@ -1041,7 +1045,11 @@ function renderAdminDash(){
         h('div',{'class':'admin-sub'},'Church of the Holy Ghost · North Cell Group')
       ),
       h('button',{'class':'logout-btn',
-        onClick:()=>{S.adminAuthed=false;S.mode='adminlogin';render();}},'Sign out')
+        onClick:()=>{
+          S.adminAuthed=false; S.mode='adminlogin';
+          sessionStorage.removeItem('adminAuthed');
+          render();
+        }},'Sign out')
     ),
     h('div',{'class':'stats-row'},
       h('div',{'class':'stat-card'},h('div',{'class':'stat-num'},String(S.responses.length)),h('div',{'class':'stat-label'},'Total Responses')),
