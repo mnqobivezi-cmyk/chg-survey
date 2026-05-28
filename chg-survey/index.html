@@ -887,7 +887,7 @@ function resetResponses(){
       S.responses=[]; S.insights=''; render();
     }
   };
-  xhr.send('{}');
+  xhr.send(JSON.stringify({pin:'2636'}));
 }
 
 // ── CHART HELPERS ─────────────────────────────────────────────────────────
