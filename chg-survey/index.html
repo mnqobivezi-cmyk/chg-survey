@@ -257,7 +257,8 @@ function render(){
   app.appendChild(c);
 }
 
-function goTo(step, dir='forward'){ S.step=step; S.dir=dir; S.inSelect=false; S.conflictAlert=false; render(); }
+function goTo(step, dir='forward'){ S.step=step; S.dir=dir; S.inSelect=false; S.conflictAlert=false; render();
+if(S.adminAuthed) loadResp(); }
 
 function reselect(fn){ S.inSelect=true; fn(); S.inSelect=false; }
 
