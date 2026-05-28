@@ -209,7 +209,7 @@ document.documentElement.style.setProperty('--sel-bg',     SEL_BG);
 const app = document.getElementById('app');
 
 const S = {
-  mode: window.location.search.includes('admin') ? 'adminlogin' : 'survey',
+  mode: window.location.search.includes('admin') ? (sessionStorage.getItem('adminAuthed')==='true' ? 'admin' : 'adminlogin') : 'survey',
   step:0, dir:'forward', inSelect:false,
   identity:null, name:'', phone:'', showNameForm:false,
   conflictAlert:false, conflictSrc:'',
@@ -221,7 +221,8 @@ const S = {
   q6:null, q6support:'',
   q7:'',
   submitting:false, submitError:'',
-  adminAuthed:false, responses:[], loadingResp:false,
+  adminAuthed: sessionStorage.getItem('adminAuthed')==='true',
+  responses:[], loadingResp:false,
   insights:'', loadingInsights:false
 };
 
@@ -877,17 +878,20 @@ function showPinModal(onSuccess) {
 }
 
 // ── RESET ALL RESPONSES ───────────────────────────────────────────────────
-function resetResponses(){
-  const xhr=new XMLHttpRequest();
-  xhr.open('POST','/.netlify/functions/reset',true);
-  xhr.setRequestHeader('Content-Type','application/json');
-  xhr.onreadystatechange=function(){
-    if(xhr.readyState!==4)return;
-    if(xhr.status===200){
-      S.responses=[]; S.insights=''; render();
-    }
-  };
-  xhr.send(JSON.stringify({pin:'2636'}));
+function deleteRow(id){
+  showPinModal(()=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST','/.netlify/functions/reset',true);
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.onreadystatechange=function(){
+      if(xhr.readyState!==4)return;
+      if(xhr.status===200){
+        S.responses=S.responses.filter(r=>r.id!==id);
+        render();
+      }
+    };
+    xhr.send(JSON.stringify({pin:'2636',id:id}));
+  });
 }
 
 // ── CHART HELPERS ─────────────────────────────────────────────────────────
@@ -1053,7 +1057,16 @@ function renderAdminDash(){
       ...(S.responses.length===0?{disabled:'',style:'opacity:.4;cursor:not-allowed'}:{}),
       onClick:()=>{
         if(S.responses.length===0) return;
-        showPinModal(()=>resetResponses());
+        showPinModal(()=>{
+          const xhr=new XMLHttpRequest();
+          xhr.open('POST','/.netlify/functions/reset',true);
+          xhr.setRequestHeader('Content-Type','application/json');
+          xhr.onreadystatechange=function(){
+            if(xhr.readyState!==4)return;
+            if(xhr.status===200){S.responses=[];S.insights='';render();}
+          };
+          xhr.send(JSON.stringify({pin:'2636'}));
+        });
       }
     },'Reset — Delete All Responses')
   ];
@@ -1094,13 +1107,18 @@ function renderAdminDash(){
       const det=h('div',{'class':'sub-detail hidden'},h('div',{'class':'detail-grid'},...blocks));
       if(r.respondent_phone){ const ph=h('div',{'style':'margin-bottom:8px;font-size:13px;color:var(--muted)'},'Contact: ',h('span',{'style':'color:var(--white)'},r.respondent_phone)); det.insertBefore(ph,det.firstChild); }
       const chev=svgChev(false);
+      const delBtn=h('button',{
+        'style':'padding:4px 10px;border-radius:8px;border:1px solid rgba(255,80,80,.3);background:transparent;color:#ff8a8a;font-size:11px;cursor:pointer',
+        onClick:(e)=>{ e.stopPropagation(); deleteRow(r.id); }
+      },'Delete');
       const hdr=h('div',{'class':'sub-header'},
         h('div',{},
           h('div',{'class':'sub-name'},r.identity_type==='named'&&r.respondent_name?r.respondent_name:'Anonymous'),
           h('div',{'class':'sub-meta'},date+' at '+time+' · '+(r.device||'unknown'))
         ),
-        h('div',{'style':'display:flex;align-items:center;gap:10px'},
+        h('div',{'style':'display:flex;align-items:center;gap:8px'},
           h('span',{'class':'sub-badge'},r.identity_type==='named'?'Named':'Anon'),
+          delBtn,
           chev
         )
       );
