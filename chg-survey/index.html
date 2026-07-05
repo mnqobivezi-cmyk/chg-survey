@@ -1,11 +1,17 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
 <title>CHG North Cell Group</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PptxGenJS/3.12.0/pptxgen.bundled.js"></script>
+<script>
+(function(){
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
+  s.onload=function(){window._pptxReady=true;};
+  document.head.appendChild(s);
+})();
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -627,79 +633,6 @@ function loadResp(){
   xhr.send();
 }
 
-function genInsights(){
-  if(!S.responses.length)return;
-  S.loadingInsights=true;S.insights='';render();
-  const sum=S.responses.map((r,i)=>`
-Response ${i+1} [${r.identity_type==='named'?r.respondent_name:'Anonymous'}]:
-- Pre Sabbath feeling: ${r.q1_presabbath}${r.q1_improvement?`, improvement: "${r.q1_improvement}"`:''}
-- Physical gatherings: ${r.q2a_physical}${r.q2b_frequency&&r.q2a_physical!=='No'?`, frequency: ${r.q2b_frequency}`:''}
-- Connection & support: ${r.q3_structure}${r.q3_text?`, note: "${r.q3_text}"`:''}
-- Participation: ${(r.q4_participation||[]).join(', ')||'none'}${r.q4_other?`, other: "${r.q4_other}"`:''}
-- Activity ideas: ${[...(r.q5_ideas||[]),r.q5_custom].filter(Boolean).join(', ')||'none'}
-- Pastoral support: ${r.q6_pastoral}${r.q6_support_note?`, note: "${r.q6_support_note}"`:''}
-- Final reflection: ${r.q7_reflection||'none'}
-`).join('\n---\n');
-  const xhr=new XMLHttpRequest();
-  xhr.open('POST','/.netlify/functions/ai-insights',true);
-  xhr.setRequestHeader('Content-Type','application/json');
-  xhr.onreadystatechange=function(){
-    if(xhr.readyState!==4)return;
-    try{const d=JSON.parse(xhr.responseText);S.insights=d.content?.find(b=>b.type==='text')?.text||'No insights returned.';}
-    catch(e){S.insights='Unable to parse response.';}
-    S.loadingInsights=false;render();
-  };
-  xhr.onerror=function(){S.insights='Unable to generate insights. Please try again.';S.loadingInsights=false;render();};
-  xhr.send(JSON.stringify({
-    model:'claude-sonnet-4-20250514',max_tokens:1500,
-    system:'You are an insightful community analyst for the Church of the Holy Ghost, North Cell Group. Analyse the survey responses and return a structured, warm, and actionable report. Use clear sections with headings. Do not use emojis. Write in a professional but pastoral tone. Cover: overall sentiment, key themes, connection and support needs, participation interests, leadership recommendations, and notable reflections from open-text responses.',
-    messages:[{role:'user',content:`Here are ${S.responses.length} survey responses:\n\n${sum}\n\nPlease provide a structured insights report.`}]
-  }));
-}
-
-function showPinModal(onSuccess){
-  let pin='';
-  const overlay=h('div',{'class':'modal-overlay'});
-  const card=h('div',{'class':'modal-card'});
-  const dots=h('div',{'class':'pin-dots'},...[0,1,2,3].map(()=>h('div',{'class':'pin-dot'})));
-  const errEl=h('div',{'class':'pin-error'});
-  const pad=h('div',{'class':'pin-pad'});
-  const cancelBtn=h('button',{'class':'btn-secondary','style':'margin-top:0'},  'Cancel');
-  cancelBtn.addEventListener('click',()=>document.body.removeChild(overlay));
-  function updateDots(){dots.querySelectorAll('.pin-dot').forEach((d,i)=>{d.className='pin-dot'+(i<pin.length?' filled':'');});}
-  function pressKey(k){
-    if(pin.length>=4)return;
-    pin+=k;updateDots();
-    if(pin.length===4){
-      if(pin==='2636'){document.body.removeChild(overlay);onSuccess();}
-      else{errEl.textContent='Incorrect PIN. Please try again.';setTimeout(()=>{pin='';updateDots();errEl.textContent='';},800);}
-    }
-  }
-  [1,2,3,4,5,6,7,8,9,'',0,'⌫'].forEach(k=>{
-    if(k===''){pad.appendChild(h('div',{}));return;}
-    const btn=h('button',{'class':'pin-key'},String(k));
-    btn.addEventListener('click',()=>{if(k==='⌫'){pin=pin.slice(0,-1);updateDots();}else pressKey(String(k));});
-    pad.appendChild(btn);
-  });
-  card.appendChild(h('div',{'class':'modal-title'},'Confirm Action'));
-  card.appendChild(h('div',{'class':'modal-sub'},'Enter your PIN to continue.'));
-  card.appendChild(dots);card.appendChild(pad);card.appendChild(errEl);card.appendChild(cancelBtn);
-  overlay.appendChild(card);document.body.appendChild(overlay);
-}
-
-function deleteRow(id){
-  showPinModal(()=>{
-    const xhr=new XMLHttpRequest();
-    xhr.open('POST','/.netlify/functions/reset',true);
-    xhr.setRequestHeader('Content-Type','application/json');
-    xhr.onreadystatechange=function(){
-      if(xhr.readyState!==4)return;
-      if(xhr.status===200){S.responses=S.responses.filter(r=>r.id!==id);render();}
-    };
-    xhr.send(JSON.stringify({pin:'2636',id:id}));
-  });
-}
-
 function countOptions(responses,field,options){
   return options.map(opt=>({
     label:opt,
@@ -707,7 +640,7 @@ function countOptions(responses,field,options){
   }));
 }
 
-function barChart(title,data,total){
+function barChart(title,data){
   const max=Math.max(...data.map(d=>d.count),1);
   return h('div',{'class':'chart-card'},
     h('div',{'class':'chart-title'},title),
@@ -765,14 +698,10 @@ function donutChart(title,data){
 function buildCharts(responses){
   if(!responses.length)return null;
   const grid=h('div',{'class':'charts-grid'});
-  const q1d=countOptions(responses,'q1_presabbath',['Love it','Enjoy it','Neutral',"I didn't know we had them",'Needs improvement']);
-  grid.appendChild(barChart('Q1 — Pre Sabbath Experience',q1d));
-  const q2d=countOptions(responses,'q2a_physical',['Yes','No','Sometimes']);
-  grid.appendChild(donutChart('Q2 — Physical Gatherings',q2d));
-  const q3d=countOptions(responses,'q3_structure',['Very connected and supported','Connected and growing','Somewhat connected','I would appreciate more fellowship and support','I currently feel disconnected']);
-  grid.appendChild(barChart('Q3 — Connection & Support',q3d));
-  const q6d=countOptions(responses,'q6_pastoral',['Yes','Occasionally','No']);
-  grid.appendChild(donutChart('Q6 — Pastoral Support',q6d));
+  grid.appendChild(barChart('Q1 — Pre Sabbath Experience',countOptions(responses,'q1_presabbath',['Love it','Enjoy it','Neutral',"I didn't know we had them",'Needs improvement'])));
+  grid.appendChild(donutChart('Q2 — Physical Gatherings',countOptions(responses,'q2a_physical',['Yes','No','Sometimes'])));
+  grid.appendChild(barChart('Q3 — Connection & Support',countOptions(responses,'q3_structure',['Very connected and supported','Connected and growing','Somewhat connected','I would appreciate more fellowship and support','I currently feel disconnected'])));
+  grid.appendChild(donutChart('Q6 — Pastoral Support',countOptions(responses,'q6_pastoral',['Yes','Occasionally','No'])));
   const q4d=['Hosting','Sharing the word','Worship','Teaching','Outreach activities','Not at the moment'].map(o=>({label:o,count:responses.filter(r=>(r.q4_participation||[]).includes(o)).length}));
   const q4c=barChart('Q4 — Participation Interests',q4d);q4c.className='chart-card full';grid.appendChild(q4c);
   const q5d=['Fellowship events','Prayer Sunday mornings','Bible study sessions','Youth activities','Family gatherings','Outreach programmes'].map(o=>({label:o,count:responses.filter(r=>(r.q5_ideas||[]).includes(o)).length}));
@@ -786,9 +715,11 @@ function buildCharts(responses){
 }
 
 function exportPptx(){
+  const PptxGenJS=window.PptxGenJS||window.pptxgen;
+  if(!PptxGenJS){alert('Export library is still loading. Please wait a moment and try again.');return;}
   const pptx=new PptxGenJS();
   pptx.layout='LAYOUT_WIDE';
-  const NAVY='080d1a',NAVY2='0d1426',CYAN='7ecfdc',WHITE='f0f6ff',MUTED='7a9ab8';
+  const NAVY='080d1a',CYAN='7ecfdc',WHITE='f0f6ff',MUTED='7a9ab8',NAVY2='0d1426';
   const n=S.responses.length;
   const today=new Date().toLocaleDateString('en-ZA',{day:'2-digit',month:'long',year:'numeric'});
   function bg(slide){
@@ -798,7 +729,7 @@ function exportPptx(){
   }
   function addTitle(slide,title,sub){
     slide.addText(title,{x:.4,y:.15,w:12,h:.5,fontSize:22,bold:true,color:WHITE,fontFace:'Segoe UI'});
-    if(sub) slide.addText(sub,{x:.4,y:.6,w:12,h:.28,fontSize:11,color:MUTED,fontFace:'Segoe UI'});
+    if(sub)slide.addText(sub,{x:.4,y:.6,w:12,h:.28,fontSize:11,color:MUTED,fontFace:'Segoe UI'});
     slide.addShape(pptx.ShapeType.rect,{x:.4,y:.92,w:1,h:.04,fill:{color:CYAN}});
   }
   function barSlide(title,sub,data){
@@ -815,7 +746,6 @@ function exportPptx(){
   }
   function pieSlide(title,sub,data){
     const slide=pptx.addSlide();bg(slide);addTitle(slide,title,sub);
-    const total=data.reduce((s,d)=>s+d.count,0)||1;
     slide.addChart(pptx.ChartType.doughnut,[{name:'Responses',labels:data.map(d=>d.label),values:data.map(d=>d.count)}],{
       x:1,y:1.1,w:6,h:4.5,chartColors:CHART_COLORS,
       showLegend:true,legendPos:'r',legendFontSize:11,legendColor:WHITE,
@@ -841,7 +771,7 @@ function exportPptx(){
     sum.addText(d.val,{x,y:1.55,w:3.8,h:1.1,fontSize:52,bold:true,color:CYAN,fontFace:'Segoe UI',align:'center'});
     sum.addText(d.label,{x,y:2.75,w:3.8,h:.5,fontSize:13,color:MUTED,fontFace:'Segoe UI',align:'center'});
   });
-  // Charts
+  // Chart slides
   barSlide('Q1 — Pre Sabbath Experience','How do members feel about the weekly online Pre Sabbath gatherings?',countOptions(S.responses,'q1_presabbath',['Love it','Enjoy it','Neutral',"I didn't know we had them",'Needs improvement']));
   pieSlide('Q2 — Physical Gatherings','Would members like occasional in-person Pre Sabbath gatherings?',countOptions(S.responses,'q2a_physical',['Yes','No','Sometimes']));
   barSlide('Q3 — Connection & Support','How connected and supported do members feel within the fellowship?',countOptions(S.responses,'q3_structure',['Very connected and supported','Connected and growing','Somewhat connected','I would appreciate more fellowship and support','I currently feel disconnected']));
@@ -860,7 +790,7 @@ function exportPptx(){
       y+=.44;
     });
   }
-  // AI Insights
+  // AI Insights if available
   if(S.insights){
     const lines=S.insights.split('\n').filter(l=>l.trim());
     let islide=pptx.addSlide();bg(islide);addTitle(islide,'AI Insights Report','Generated by Claude AI');
@@ -873,6 +803,49 @@ function exportPptx(){
     });
   }
   pptx.writeFile({fileName:`CHG_NorthCellGroup_Survey_${today.replace(/ /g,'_')}.pptx`});
+}
+
+function showPinModal(onSuccess){
+  let pin='';
+  const overlay=h('div',{'class':'modal-overlay'});
+  const card=h('div',{'class':'modal-card'});
+  const dots=h('div',{'class':'pin-dots'},...[0,1,2,3].map(()=>h('div',{'class':'pin-dot'})));
+  const errEl=h('div',{'class':'pin-error'});
+  const pad=h('div',{'class':'pin-pad'});
+  const cancelBtn=h('button',{'class':'btn-secondary','style':'margin-top:0'},'Cancel');
+  cancelBtn.addEventListener('click',()=>document.body.removeChild(overlay));
+  function updateDots(){dots.querySelectorAll('.pin-dot').forEach((d,i)=>{d.className='pin-dot'+(i<pin.length?' filled':'');});}
+  function pressKey(k){
+    if(pin.length>=4)return;
+    pin+=k;updateDots();
+    if(pin.length===4){
+      if(pin==='2636'){document.body.removeChild(overlay);onSuccess();}
+      else{errEl.textContent='Incorrect PIN. Please try again.';setTimeout(()=>{pin='';updateDots();errEl.textContent='';},800);}
+    }
+  }
+  [1,2,3,4,5,6,7,8,9,'',0,'⌫'].forEach(k=>{
+    if(k===''){pad.appendChild(h('div',{}));return;}
+    const btn=h('button',{'class':'pin-key'},String(k));
+    btn.addEventListener('click',()=>{if(k==='⌫'){pin=pin.slice(0,-1);updateDots();}else pressKey(String(k));});
+    pad.appendChild(btn);
+  });
+  card.appendChild(h('div',{'class':'modal-title'},'Confirm Action'));
+  card.appendChild(h('div',{'class':'modal-sub'},'Enter your PIN to continue.'));
+  card.appendChild(dots);card.appendChild(pad);card.appendChild(errEl);card.appendChild(cancelBtn);
+  overlay.appendChild(card);document.body.appendChild(overlay);
+}
+
+function deleteRow(id){
+  showPinModal(()=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST','/.netlify/functions/reset',true);
+    xhr.setRequestHeader('Content-Type','application/json');
+    xhr.onreadystatechange=function(){
+      if(xhr.readyState!==4)return;
+      if(xhr.status===200){S.responses=S.responses.filter(r=>r.id!==id);render();}
+    };
+    xhr.send(JSON.stringify({pin:'2636',id:id}));
+  });
 }
 
 function renderAdminDash(){
@@ -888,22 +861,27 @@ function renderAdminDash(){
       h('div',{'class':'stat-card'},h('div',{'class':'stat-num'},String(named)),h('div',{'class':'stat-label'},'Named')),
       h('div',{'class':'stat-card'},h('div',{'class':'stat-num'},String(anon)),h('div',{'class':'stat-label'},'Anonymous'))
     ),
-    h('button',{'class':'insights-btn',...(S.loadingInsights||!S.responses.length?{disabled:''}:{}),onClick:genInsights},S.loadingInsights?'Generating insights...':'Generate AI Insights'),
-    h('button',{'class':'export-btn',...(!S.responses.length?{disabled:''}:{}),onClick:exportPptx},'Export to PowerPoint'),
-    h('button',{'class':'reset-btn',...(S.responses.length===0?{disabled:'',style:'opacity:.4;cursor:not-allowed'}:{}),
+    h('button',{'class':'export-btn',...(!S.responses.length?{disabled:''}:{}),
+      onClick:()=>{
+        if(!S.responses.length)return;
+        const PptxGenJS=window.PptxGenJS||window.pptxgen;
+        if(!PptxGenJS){alert('Export library is still loading. Please wait a moment and try again.');return;}
+        exportPptx();
+      }
+    },'Export to PowerPoint'),
+    h('button',{'class':'reset-btn',...(!S.responses.length?{disabled:'',style:'opacity:.4;cursor:not-allowed'}:{}),
       onClick:()=>{
         if(!S.responses.length)return;
         showPinModal(()=>{
           const xhr=new XMLHttpRequest();
           xhr.open('POST','/.netlify/functions/reset',true);
           xhr.setRequestHeader('Content-Type','application/json');
-          xhr.onreadystatechange=function(){if(xhr.readyState!==4)return;if(xhr.status===200){S.responses=[];S.insights='';render();}};
+          xhr.onreadystatechange=function(){if(xhr.readyState!==4)return;if(xhr.status===200){S.responses=[];render();}};
           xhr.send(JSON.stringify({pin:'2636'}));
         });
       }
     },'Reset — Delete All Responses')
   ];
-  if(S.insights) kids.push(h('div',{'class':'insights-card fade-u'},h('h3',{},'AI Insights Report'),h('div',{'class':'insights-body'},S.insights)));
   const charts=buildCharts(S.responses);
   if(charts) kids.push(charts);
   if(S.loadingResp){
@@ -922,19 +900,16 @@ function renderAdminDash(){
       blocks.push(h('div',{'class':'detail-block'},h('div',{'class':'detail-label'},'Physical Gatherings'),h('div',{'class':'detail-val'},(r.q2a_physical||'—')+(r.q2b_frequency&&r.q2a_physical!=='No'?' · '+r.q2b_frequency:''))));
       blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Connection & Support'),h('div',{'class':'detail-val'},r.q3_structure||'—')));
       blocks.push(h('div',{'class':'detail-block'},h('div',{'class':'detail-label'},'Pastoral Support'),h('div',{'class':'detail-val'},r.q6_pastoral||'—')));
-      if(r.q4_participation?.length||r.q4_other) blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Participation'),h('div',{'class':'detail-val'},[...(r.q4_participation||[]),r.q4_other].filter(Boolean).join(', '))));
-      if(r.q5_ideas?.length||r.q5_custom) blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Activity Ideas'),h('div',{'class':'detail-val'},[...(r.q5_ideas||[]),r.q5_custom].filter(Boolean).join(', '))));
-      if(r.q1_improvement) blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Improvement Note'),h('div',{'class':'detail-val'},r.q1_improvement)));
-      if(r.q3_text) blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Connection Note'),h('div',{'class':'detail-val'},r.q3_text)));
-      if(r.q6_support_note) blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Support Note'),h('div',{'class':'detail-val'},r.q6_support_note)));
-      if(r.q7_reflection) blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Final Reflection'),h('div',{'class':'detail-val'},r.q7_reflection)));
+      if(r.q4_participation?.length||r.q4_other)blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Participation'),h('div',{'class':'detail-val'},[...(r.q4_participation||[]),r.q4_other].filter(Boolean).join(', '))));
+      if(r.q5_ideas?.length||r.q5_custom)blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Activity Ideas'),h('div',{'class':'detail-val'},[...(r.q5_ideas||[]),r.q5_custom].filter(Boolean).join(', '))));
+      if(r.q1_improvement)blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Improvement Note'),h('div',{'class':'detail-val'},r.q1_improvement)));
+      if(r.q3_text)blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Connection Note'),h('div',{'class':'detail-val'},r.q3_text)));
+      if(r.q6_support_note)blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Support Note'),h('div',{'class':'detail-val'},r.q6_support_note)));
+      if(r.q7_reflection)blocks.push(h('div',{'class':'detail-block full'},h('div',{'class':'detail-label'},'Final Reflection'),h('div',{'class':'detail-val'},r.q7_reflection)));
       const det=h('div',{'class':'sub-detail hidden'},h('div',{'class':'detail-grid'},...blocks));
       if(r.respondent_phone){const ph=h('div',{'style':'margin-bottom:8px;font-size:13px;color:var(--muted)'},'Contact: ',h('span',{'style':'color:var(--white)'},r.respondent_phone));det.insertBefore(ph,det.firstChild);}
       const chev=svgChev(false);
-      const delBtn=h('button',{
-        'style':'padding:4px 10px;border-radius:8px;border:1px solid rgba(255,80,80,.3);background:transparent;color:#ff8a8a;font-size:11px;cursor:pointer',
-        onClick:(e)=>{e.stopPropagation();deleteRow(r.id);}
-      },'Delete');
+      const delBtn=h('button',{'style':'padding:4px 10px;border-radius:8px;border:1px solid rgba(255,80,80,.3);background:transparent;color:#ff8a8a;font-size:11px;cursor:pointer',onClick:(e)=>{e.stopPropagation();deleteRow(r.id);}},'Delete');
       const hdr=h('div',{'class':'sub-header'},
         h('div',{},h('div',{'class':'sub-name'},r.identity_type==='named'&&r.respondent_name?r.respondent_name:'Anonymous'),h('div',{'class':'sub-meta'},date+' at '+time+' · '+(r.device||'unknown'))),
         h('div',{'style':'display:flex;align-items:center;gap:8px'},h('span',{'class':'sub-badge'},r.identity_type==='named'?'Named':'Anon'),delBtn,chev)
