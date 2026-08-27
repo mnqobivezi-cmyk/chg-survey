@@ -1,4 +1,4 @@
 [build]
   functions = "netlify/functions"
   publish = "."
-  # rebuild trigger: Neon DB extension install
+  # rebuild trigger: Neon DB extension configured
