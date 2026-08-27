@@ -1,4 +1,4 @@
 [build]
   functions = "netlify/functions"
   publish = "."
-  # rebuild trigger: NEON_DATABASE_URL runtime scope fix
+  # rebuild trigger: NEON_DATABASE_URL set as non-secret var
