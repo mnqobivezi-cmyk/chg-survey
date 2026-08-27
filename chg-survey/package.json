@@ -2,6 +2,6 @@
   "name": "chg-survey",
   "version": "1.0.0",
   "dependencies": {
-    "@netlify/database": "^1.0.0"
+    "node-fetch": "^2.7.0"
   }
 }
