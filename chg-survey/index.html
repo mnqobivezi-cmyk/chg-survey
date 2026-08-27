@@ -159,8 +159,18 @@ td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.05);color:var(--wh
 .suburb-chip b{color:var(--white)}
 .sub-list{display:flex;flex-direction:column;gap:8px}
 .sub-item{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:13px;padding:13px 15px}
+.sub-item.clickable{padding:0;overflow:hidden;cursor:pointer}
+.sub-header{padding:13px 15px;display:flex;align-items:center;justify-content:space-between}
 .sub-name{font-size:14px;font-weight:600;color:var(--white)}
 .sub-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.sub-detail{padding:4px 15px 15px}
+.detail-grid{display:flex;flex-direction:column;gap:8px}
+.detail-block{background:rgba(255,255,255,.03);border-radius:9px;padding:10px 12px}
+.detail-label{font-size:10px;color:var(--acc);text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px}
+.detail-val{font-size:13px;color:var(--white);line-height:1.5}
+.chevron{transition:transform .2s;flex-shrink:0}
+.chevron.open{transform:rotate(180deg)}
+.privacy-note{font-size:11px;color:var(--muted);font-style:italic;padding:8px 15px 0}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:flex;align-items:center;justify-content:center}
 .modal-card{background:#0d1426;border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:28px 24px;width:90%;max-width:340px;text-align:center}
 .modal-title{font-size:17px;font-weight:600;color:var(--white);margin-bottom:6px}
@@ -216,6 +226,14 @@ function svgCircleCheck(){
   return s;
 }
 function logo(){return h('div',{'class':'logo-wrap'},h('img',{src:LOGO,alt:'CHG'}));}
+function svgChev(open){
+  const s=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  s.setAttribute('width','16');s.setAttribute('height','16');s.setAttribute('viewBox','0 0 16 16');
+  s.setAttribute('fill','none');s.setAttribute('stroke','currentColor');s.setAttribute('stroke-width','1.5');
+  s.setAttribute('stroke-linecap','round');s.className='chevron'+(open?' open':'');
+  s.innerHTML='<polyline points="4,6 8,10 12,6"/>';
+  return s;
+}
 function svgMale(){
   const s=document.createElementNS('http://www.w3.org/2000/svg','svg');
   s.setAttribute('viewBox','0 0 24 24');s.setAttribute('fill','none');s.setAttribute('stroke','currentColor');
@@ -376,6 +394,13 @@ const QUESTIONS = [
     label:'Is there anything else leadership should know?'}
 ];
 
+const QUESTION_LABELS={};
+QUESTIONS.forEach(q=>{
+  QUESTION_LABELS[q.key]=q.label;
+  if(q.conditional) QUESTION_LABELS[q.conditional.key]=q.conditional.label;
+  if(q.extra) QUESTION_LABELS[q.extra.key]=q.extra.label;
+});
+
 /* ---------- flat step list ---------- */
 function buildSteps(A){
   const steps=[{id:'welcome'}];
@@ -406,7 +431,7 @@ const S = {
   adminTab:0, adminPwInput:'', adminPwError:'',
   data:null, loadingData:false,
   showResetModal:false, resetPinDigits:'', resetError:'', resetting:false,
-  suburbFilter:'', cellgroupFilter:'',
+  suburbFilter:'', cellgroupFilter:'', expandedRespondent:null,
   errorMsg:'', errorStep:-1,
   cgGroupCount:4, cgGroupNames:[], cgAllocations:{}, cgMethod:{}, cgSaving:false, cgSaved:false,
   lkFirst:'', lkSurname:'', lkPhone:'', lkResult:null, lkLoading:false, lkError:'',
@@ -1161,17 +1186,46 @@ function renderCongregationTab(){
   if(S.cellgroupFilter==='yes') rows=rows.filter(r=>r.knows_cell_group===true);
   if(S.cellgroupFilter==='no') rows=rows.filter(r=>r.knows_cell_group===false);
 
-  const table=h('table',{},
-    h('thead',{},h('tr',{},h('th',{},'Name'),h('th',{},'Suburb'),h('th',{},'Phone'),h('th',{},'Cell Group'),h('th',{},'Submitted'))),
-    h('tbody',{},...rows.map(r=>h('tr',{},
-      h('td',{},(r.first_name||'')+' '+(r.surname||'')),
-      h('td',{},r.suburb||'-'),
-      h('td',{},r.phone||'-'),
-      h('td',{},r.knows_cell_group===true?'Yes':r.knows_cell_group===false?'No':'-'),
-      h('td',{},r.submitted_at?new Date(r.submitted_at).toLocaleDateString():'-')
-    )))
-  );
-  frag.appendChild(h('div',{'class':'table-wrap'},table));
+  frag.appendChild(h('p',{'style':'font-size:12px;color:var(--muted);margin-bottom:10px'},'Tap a name to view their individual answers. Answers they chose to keep anonymous are never linked to their name and will not appear here.'));
+
+  const list=h('div',{'class':'sub-list'});
+  rows.forEach(r=>{
+    const open=S.expandedRespondent===r.id;
+    const item=h('div',{'class':'sub-item clickable'});
+    const header=h('div',{'class':'sub-header'},
+      h('div',{},
+        h('div',{'class':'sub-name'},(r.first_name||'')+' '+(r.surname||'')),
+        h('div',{'class':'sub-meta'},(r.suburb||'No suburb')+' · '+(r.phone||'No phone')+' · '+(r.submitted_at?new Date(r.submitted_at).toLocaleDateString():'-'))
+      ),
+      svgChev(open)
+    );
+    header.addEventListener('click',()=>{ vib(22); S.expandedRespondent = open ? null : r.id; render(); });
+    item.appendChild(header);
+
+    if(open){
+      const answers=(S.data.identifiedAnswers||[]).filter(a=>a.respondent_id===r.id);
+      const detail=h('div',{'class':'sub-detail'});
+      const grid=h('div',{'class':'detail-grid'});
+      grid.appendChild(h('div',{'class':'detail-block'},h('div',{'class':'detail-label'},'Cell Group'),h('div',{'class':'detail-val'},
+        (r.knows_cell_group===true?('Yes'+(r.stated_cell_group?(' — '+r.stated_cell_group):'')):r.knows_cell_group===false?'No':'-')
+      )));
+      grid.appendChild(h('div',{'class':'detail-block'},h('div',{'class':'detail-label'},'Address'),h('div',{'class':'detail-val'},r.formatted_address||'-')));
+      if(answers.length){
+        answers.forEach(a=>{
+          grid.appendChild(h('div',{'class':'detail-block'},
+            h('div',{'class':'detail-label'},QUESTION_LABELS[a.question_key]||a.question_key),
+            h('div',{'class':'detail-val'},a.answer)
+          ));
+        });
+      } else {
+        grid.appendChild(h('div',{'class':'detail-block'},h('div',{'class':'detail-val'},'No named answers — all their responses were kept anonymous.')));
+      }
+      detail.appendChild(grid);
+      item.appendChild(detail);
+    }
+    list.appendChild(item);
+  });
+  frag.appendChild(list);
   return frag;
 }
 
