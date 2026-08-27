@@ -39,6 +39,13 @@ body{background:var(--navy);font-family:'Segoe UI',system-ui,sans-serif;color:va
 @keyframes slideF{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:translateX(0)}}
 @keyframes slideB{from{opacity:0;transform:translateX(-32px)}to{opacity:1;transform:translateX(0)}}
 @keyframes fadeU{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes shakeX{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-8px)}40%,60%{transform:translateX(8px)}}
+.shake{animation:shakeX .4s}
+.gender-row{display:flex;gap:10px;margin-bottom:16px}
+.gender-card{flex:1;padding:20px 12px;border-radius:16px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.03);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--white)}
+.gender-card.selected{border-color:var(--sel-border);background:var(--sel-bg);color:var(--acc)}
+.gender-card svg{width:26px;height:26px}
+.gender-card-label{font-size:13px;font-weight:700}
 .slide-f{animation:slideF .36s cubic-bezier(.4,0,.2,1)}
 .slide-b{animation:slideB .36s cubic-bezier(.4,0,.2,1)}
 .no-anim{animation:none!important;transition:none!important}
@@ -203,6 +210,20 @@ function svgCircleCheck(){
   return s;
 }
 function logo(){return h('div',{'class':'logo-wrap'},h('img',{src:LOGO,alt:'CHG'}));}
+function svgMale(){
+  const s=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  s.setAttribute('viewBox','0 0 24 24');s.setAttribute('fill','none');s.setAttribute('stroke','currentColor');
+  s.setAttribute('stroke-width','1.5');s.setAttribute('stroke-linecap','round');s.setAttribute('stroke-linejoin','round');
+  s.innerHTML='<circle cx="12" cy="8" r="4.2"/><path d="M4.5 20c0-4.2 3.4-7.2 7.5-7.2s7.5 3 7.5 7.2"/>';
+  return s;
+}
+function svgFemale(){
+  const s=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  s.setAttribute('viewBox','0 0 24 24');s.setAttribute('fill','none');s.setAttribute('stroke','currentColor');
+  s.setAttribute('stroke-width','1.5');s.setAttribute('stroke-linecap','round');s.setAttribute('stroke-linejoin','round');
+  s.innerHTML='<circle cx="12" cy="7.5" r="4.5"/><line x1="12" y1="12" x2="12" y2="21"/><line x1="8" y1="17" x2="16" y2="17"/>';
+  return s;
+}
 
 /* ---------- wheel widget ---------- */
 function makeWheel(items,value,onChange,itemH){
@@ -226,7 +247,26 @@ function makeWheel(items,value,onChange,itemH){
     el.addEventListener('click',()=>{if(i===idx)return;idx=i;upd(false);onChange(items[idx]);vib(22);});
     inn.appendChild(el);
   });
-  requestAnimationFrame(()=>upd(false));
+  requestAnimationFrame(()=>{
+    upd(false);
+    setTimeout(()=>{
+      if(drag)return;
+      const hi=Math.min(idx+1,items.length-1);
+      const lo=Math.max(idx-1,0);
+      inn.style.transition='transform .4s cubic-bezier(.4,0,.2,1)';
+      inn.style.transform=`translateY(${(HGT/2)-(IH/2)-hi*IH}px)`;
+      setTimeout(()=>{
+        if(drag)return;
+        inn.style.transition='transform .4s cubic-bezier(.4,0,.2,1)';
+        inn.style.transform=`translateY(${(HGT/2)-(IH/2)-lo*IH}px)`;
+        setTimeout(()=>{
+          if(drag)return;
+          inn.style.transition='transform .4s cubic-bezier(.4,0,.2,1)';
+          inn.style.transform=`translateY(${(HGT/2)-(IH/2)-idx*IH}px)`;
+        },420);
+      },420);
+    },400);
+  });
   function clamp(n){return Math.max(0,Math.min(items.length-1,n));}
   wrap.addEventListener('mousedown',e=>{e.preventDefault();drag=true;sy=e.clientY;si=idx;});
   window.addEventListener('mousemove',e=>{if(!drag)return;e.preventDefault();const ni=clamp(si+Math.round((sy-e.clientY)/IH));if(ni!==idx){idx=ni;upd(true);onChange(items[idx]);vib(16);}});
@@ -273,17 +313,19 @@ const QUESTIONS = [
   // Section 5 - weekday
   {section:4, key:'weekday_interest', sensitive:false, type:'select',
     label:'Would you be interested in weekday gatherings?', options:['Yes','No','Maybe']},
+  {section:4, key:'weekday_format', sensitive:false, type:'chips',
+    label:'Would you prefer these gatherings physical or online?',
+    options:['Physical','Online','Either'],
+    showIf:A=>A.weekday_interest!=='No'},
   {section:4, key:'weekday_type', sensitive:false, type:'multichips',
     label:'What type of weekday gathering would interest you?',
     options:['Prayer meeting','Bible study','Fellowship evening','Youth gathering','Family gathering','Outreach activity'],
     showIf:A=>A.weekday_interest!=='No'},
   {section:4, key:'weekday_day', sensitive:false, type:'chips',
     label:'What day works best for you?',
-    options:['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
-    showIf:A=>A.weekday_interest!=='No'},
-  {section:4, key:'weekday_time', sensitive:false, type:'chips',
-    label:'What time works best?', options:['Morning','Afternoon','Evening'],
-    showIf:A=>A.weekday_interest!=='No'},
+    options:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday'],
+    showIf:A=>A.weekday_interest!=='No',
+    extra:{key:'weekday_time', label:'What time works best?', options:['Morning','Afternoon','Evening']}},
   // Section 6 - fellowship
   {section:5, key:'fellowship_activities', sensitive:false, type:'multichips',
     label:'What activities would you like to see in the branch?',
@@ -314,9 +356,10 @@ const QUESTIONS = [
     label:'How can leadership support you better?'},
   {section:7, key:'pastoral_contact', sensitive:false, type:'select',
     label:'Would you like someone from leadership to contact you about this?',
+    hint:'If yes, this will be linked to the name and phone number you gave at the start of the survey so leadership can reach out.',
     options:['Yes, please contact me','No, keep my response anonymous']},
   // Section 9 - feedback
-  {section:8, key:'feedback_comms', sensitive:true, type:'multichips',
+  {section:8, key:'feedback_comms', sensitive:false, type:'multichips',
     label:'How do you prefer to receive branch communications?',
     options:['WhatsApp','Email','Phone call','In person','Notice board']},
   {section:8, key:'feedback_good', sensitive:true, type:'text',
@@ -331,7 +374,6 @@ const QUESTIONS = [
 function buildSteps(A){
   const steps=[{id:'welcome'}];
   SECTION_META.forEach((sec,si)=>{
-    steps.push({id:'sectionintro',section:si});
     if(si===0){ steps.push({id:'details'}); }
     else if(si===1){ steps.push({id:'address'}); steps.push({id:'cellgroup'}); }
     else {
@@ -357,7 +399,8 @@ const S = {
   adminTab:0, adminPwInput:'', adminPwError:'',
   data:null, loadingData:false,
   showResetModal:false, resetPinDigits:'', resetError:'', resetting:false,
-  suburbFilter:'', cellgroupFilter:''
+  suburbFilter:'', cellgroupFilter:'',
+  errorMsg:'', errorStep:-1
 };
 
 function currentSteps(){ return buildSteps(A); }
@@ -365,11 +408,17 @@ function goRel(delta,dir){
   const steps=currentSteps();
   let ni=S.stepIdx+delta;
   ni=Math.max(0,Math.min(steps.length-1,ni));
-  S.stepIdx=ni; S.dir=dir; S.inSelect=false; render();
+  S.stepIdx=ni; S.dir=dir; S.inSelect=false; S.errorMsg=''; S.errorStep=-1; render();
 }
 function goNext(){ goRel(1,'forward'); }
 function goBack(){ goRel(-1,'back'); }
-function reselect(fn){ S.inSelect=true; fn(); render(); S.inSelect=false; }
+function reselect(fn){ S.inSelect=true; S.errorMsg=''; S.errorStep=-1; fn(); render(); S.inSelect=false; }
+function clearErr(){ S.errorMsg=''; S.errorStep=-1; }
+function failValidation(msg){
+  S.errorMsg=msg; S.errorStep=S.stepIdx; vib([15,40,15]); render();
+  const errEl=app.querySelector('.err');
+  if(errEl) errEl.scrollIntoView({block:'center'});
+}
 
 /* ---------- render root ---------- */
 function render(){
@@ -385,6 +434,7 @@ function render(){
 function screenWrap(content,accColor,progress,centered){
   document.documentElement.style.setProperty('--acc',accColor||'#7ecfdc');
   const ac=S.inSelect?'no-anim':(S.dir==='forward'?'slide-f':'slide-b');
+  const showErr=S.errorMsg && S.errorStep===S.stepIdx;
   const kids=[];
   if(progress){
     kids.push(h('div',{'class':'progress-wrap'},
@@ -394,7 +444,9 @@ function screenWrap(content,accColor,progress,centered){
       h('div',{'style':'font-size:11px;color:var(--muted);text-align:right;margin-top:5px;letter-spacing:.5px'},progress.label)
     ));
   }
-  kids.push(h('div',{'class':'card '+ac},...content));
+  const cardKids=[...content];
+  if(showErr) cardKids.splice(Math.max(0,cardKids.length-1),0,h('div',{'class':'err'},S.errorMsg));
+  kids.push(h('div',{'class':'card '+ac+(showErr?' shake':'')},...cardKids));
   return h('div',{'class':'screen'+(centered?' center':'')},...kids);
 }
 
@@ -413,21 +465,6 @@ function renderSurveyStep(){
     h('button',{'class':'btn-primary',onClick:()=>{vib(28);goNext();}},'Start Survey'),
     h('button',{'class':'btn-secondary','style':'margin-top:8px;font-size:12px;opacity:.35',onClick:()=>{S.mode='adminlogin';render();}},'Admin')
   ],null,null,true);
-
-  if(step.id==='sectionintro'){
-    const sec=SECTION_META[step.section];
-    document.documentElement.style.setProperty('--acc',sec.color);
-    return h('div',{'class':'screen center'},
-      h('div',{'class':'card fade-u'},
-        h('div',{'class':'q-label'},'Section '+(step.section+1)+' of '+SECTION_META.length),
-        h('h1',{'style':'font-size:21px'},sec.title),
-        h('div',{'class':'divider','style':'margin-left:0'}),
-        h('p',{'class':'subtitle'},sec.desc),
-        h('button',{'class':'btn-primary',onClick:()=>{vib(28);goNext();}},'Begin Section'),
-        S.stepIdx>0?h('button',{'class':'btn-secondary',onClick:()=>{goBack();}},'Back'):null
-      )
-    );
-  }
 
   if(step.id==='details') return renderDetails();
   if(step.id==='address') return renderAddress();
@@ -456,16 +493,16 @@ function renderDetails(){
   A.dob_day=A.dob_day||15; A.dob_month=A.dob_month||'January'; A.dob_year=A.dob_year||1985;
 
   const fnInp=h('input',{type:'text',placeholder:'First name',value:A.first_name});
-  fnInp.addEventListener('input',e=>{A.first_name=e.target.value;updateBtn();});
+  fnInp.addEventListener('input',e=>{A.first_name=e.target.value;clearErr();});
   const snInp=h('input',{type:'text',placeholder:'Surname',value:A.surname});
-  snInp.addEventListener('input',e=>{A.surname=e.target.value;updateBtn();});
-  const phInp=h('input',{type:'tel',placeholder:'WhatsApp or phone number',value:A.phone});
-  phInp.addEventListener('input',e=>{A.phone=e.target.value;updateBtn();});
+  snInp.addEventListener('input',e=>{A.surname=e.target.value;clearErr();});
+  const phInp=h('input',{type:'tel',placeholder:'Phone number',value:A.phone});
+  phInp.addEventListener('input',e=>{A.phone=e.target.value;clearErr();});
 
-  const genderOpts=h('div',{'class':'options'},...['Male','Female','Prefer not to say'].map(o=>{
+  const genderOpts=h('div',{'class':'gender-row'},...[['Male',svgMale],['Female',svgFemale]].map(([o,icon])=>{
     const sel=A.gender===o;
-    const btn=h('button',{'class':'opt'+(sel?' selected':'')},h('span',{'class':'opt-ring'},sel?svgCheck():''),o);
-    btn.addEventListener('click',()=>{vib(22);A.gender=o;reselect(()=>{});updateBtn();render();});
+    const btn=h('button',{'class':'gender-card'+(sel?' selected':'')},icon(),h('div',{'class':'gender-card-label'},o));
+    btn.addEventListener('click',()=>{vib(22);A.gender=o;reselect(()=>{});});
     return btn;
   }));
 
@@ -474,17 +511,19 @@ function renderDetails(){
   const years=Array.from({length:(new Date().getFullYear()-1935)+1},(_,i)=>new Date().getFullYear()-i);
 
   const dobRow=h('div',{'class':'dob-row'},
-    h('div',{'style':'flex:1'},h('div',{'class':'dob-label'},'Day'),makeWheel(days,A.dob_day,v=>{A.dob_day=v;},38)),
-    h('div',{'style':'flex:1.4'},h('div',{'class':'dob-label'},'Month'),makeWheel(months,A.dob_month,v=>{A.dob_month=v;},38)),
-    h('div',{'style':'flex:1'},h('div',{'class':'dob-label'},'Year'),makeWheel(years,A.dob_year,v=>{A.dob_year=v;},38))
+    h('div',{'style':'flex:1'},h('div',{'class':'dob-label'},'Day'),makeWheel(days,A.dob_day,v=>{A.dob_day=v;clearErr();},38)),
+    h('div',{'style':'flex:1.4'},h('div',{'class':'dob-label'},'Month'),makeWheel(months,A.dob_month,v=>{A.dob_month=v;clearErr();},38)),
+    h('div',{'style':'flex:1'},h('div',{'class':'dob-label'},'Year'),makeWheel(years,A.dob_year,v=>{A.dob_year=v;clearErr();},38))
   );
 
   const nextBtn=h('button',{'class':'btn-primary'},'Next');
-  function updateBtn(){
-    nextBtn.disabled=!(A.first_name.trim()&&A.surname.trim()&&A.gender&&A.phone.trim());
-  }
-  nextBtn.addEventListener('click',()=>{ if(!nextBtn.disabled){ vib(28); goNext(); } });
-  updateBtn();
+  nextBtn.addEventListener('click',()=>{
+    if(!A.first_name.trim()) return failValidation('Please enter your first name.');
+    if(!A.surname.trim()) return failValidation('Please enter your surname.');
+    if(!A.gender) return failValidation('Please select your gender.');
+    if(!A.phone.trim()) return failValidation('Please enter your phone number.');
+    vib(28); goNext();
+  });
 
   return screenWrap([
     h('div',{'class':'q-label'},sec.title),
@@ -496,7 +535,7 @@ function renderDetails(){
     genderOpts,
     h('h2',{},'Date of birth'),
     dobRow,
-    h('h2',{'style':'margin-top:8px'},'WhatsApp or phone number'),
+    h('h2',{'style':'margin-top:8px'},'Phone number'),
     phInp,
     h('div',{'class':'nav-row'},
       h('button',{'class':'btn-secondary',onClick:goBack},'Back'),
@@ -511,7 +550,7 @@ function renderAddress(){
   const sec=SECTION_META[1];
   const input=h('input',{type:'text',placeholder:'Start typing your suburb or address...',value:S.addrQuery});
   input.addEventListener('input',e=>{
-    S.addrQuery=e.target.value; A.address_confirmed=null;
+    S.addrQuery=e.target.value; A.address_confirmed=null; clearErr();
     clearTimeout(addrTimer);
     if(S.addrQuery.trim().length<3){ S.addrResults=[]; renderInline(); return; }
     addrTimer=setTimeout(async ()=>{
@@ -551,8 +590,11 @@ function renderAddress(){
 
   function renderInline(){ fillResults(); }
 
-  const nextBtn=h('button',{'class':'btn-primary',...(A.address_confirmed?{}:{disabled:''})},'Next');
-  nextBtn.addEventListener('click',()=>{ if(A.address_confirmed){ vib(28); goNext(); } });
+  const nextBtn=h('button',{'class':'btn-primary'},'Next');
+  nextBtn.addEventListener('click',()=>{
+    if(!A.address_confirmed) return failValidation('Please select your address from the list.');
+    vib(28); goNext();
+  });
 
   const kids=[
     h('div',{'class':'q-label'},sec.title),
@@ -581,8 +623,11 @@ function renderCellGroup(){
     btn.addEventListener('click',()=>{vib(22);A.knows_cell_group=(o==='Yes');reselect(()=>{});});
     return btn;
   }));
-  const nextBtn=h('button',{'class':'btn-primary',...(A.knows_cell_group!==undefined&&A.knows_cell_group!==null?{}:{disabled:''})},'Next');
-  nextBtn.addEventListener('click',()=>{ if(A.knows_cell_group!==undefined&&A.knows_cell_group!==null){ vib(28); goNext(); } });
+  const nextBtn=h('button',{'class':'btn-primary'},'Next');
+  nextBtn.addEventListener('click',()=>{
+    if(A.knows_cell_group===undefined||A.knows_cell_group===null) return failValidation('Please select an answer.');
+    vib(28); goNext();
+  });
   return screenWrap([
     h('div',{'class':'q-label'},sec.title),
     h('h2',{},'Do you know which Cell Group you belong to?'),
@@ -607,6 +652,7 @@ function privacyRow(key){
 function renderQuestion(q){
   const sec=SECTION_META[q.section];
   const kids=[h('div',{'class':'q-label'},sec.title), h('h2',{},q.label)];
+  if(q.hint) kids.push(h('p',{'class':'subtitle'},q.hint));
   let hasAnswer=true;
 
   if(q.type==='rating'){
@@ -622,7 +668,7 @@ function renderQuestion(q){
   } else if(q.type==='wheel'){
     kids.push(h('p',{'class':'subtitle'},'Scroll or drag to select'));
     if(A[q.key]===undefined) A[q.key]=q.options[0];
-    kids.push(makeWheel(q.options,A[q.key],v=>{A[q.key]=v;render();}));
+    kids.push(makeWheel(q.options,A[q.key],v=>{A[q.key]=v;reselect(()=>{});}));
     hasAnswer=!!A[q.key];
   } else if(q.type==='select'){
     kids.push(h('div',{'class':'options'},...q.options.map(o=>{
@@ -656,7 +702,7 @@ function renderQuestion(q){
     hasAnswer=A[q.key].length>0;
   } else if(q.type==='text'){
     const ta=h('textarea',{rows:'4',placeholder:q.optional?'Optional':'Your answer'},A[q.key]||'');
-    ta.addEventListener('input',e=>{A[q.key]=e.target.value;updateNext();});
+    ta.addEventListener('input',e=>{A[q.key]=e.target.value;clearErr();});
     kids.push(ta);
     hasAnswer=q.optional||!!(A[q.key]&&A[q.key].trim());
   }
@@ -666,22 +712,40 @@ function renderQuestion(q){
     kids.push(h('p',{'style':'font-size:13px;color:var(--muted);margin:10px 0 8px'},c.label));
     if(c.type==='text'){
       const ta=h('textarea',{rows:'3',placeholder:'Your answer'},A[c.key]||'');
-      ta.addEventListener('input',e=>{A[c.key]=e.target.value;});
+      ta.addEventListener('input',e=>{A[c.key]=e.target.value;clearErr();});
       kids.push(ta);
     } else if(c.type==='wheel'){
       if(A[c.key]===undefined) A[c.key]=c.options[0];
-      kids.push(makeWheel(c.options,A[c.key],v=>{A[c.key]=v;}));
+      kids.push(makeWheel(c.options,A[c.key],v=>{A[c.key]=v;clearErr();}));
     }
   }
 
-  if(q.sensitive){
-    kids.push(privacyRow(q.key));
-    if(!P[q.key]) hasAnswer=false;
+  let extraOk=true;
+  if(q.extra){
+    const ex=q.extra;
+    kids.push(h('p',{'style':'font-size:13px;color:var(--muted);margin:10px 0 8px'},ex.label));
+    A[ex.key]=A[ex.key]||null;
+    kids.push(h('div',{'class':'chips'},...ex.options.map(o=>{
+      const sel=A[ex.key]===o;
+      const chip=h('button',{'class':'chip'+(sel?' selected':'')},o);
+      chip.addEventListener('click',()=>{vib(22);A[ex.key]=o;reselect(()=>{});});
+      return chip;
+    })));
+    extraOk=!!A[ex.key];
   }
 
-  const nextBtn=h('button',{'class':'btn-primary',...(hasAnswer?{}:{disabled:''})},'Next');
-  function updateNext(){ nextBtn.disabled=!hasAnswer; }
-  nextBtn.addEventListener('click',()=>{ if(hasAnswer){ vib(28); goNext(); } });
+  const needsPrivacy=q.sensitive && !P[q.key];
+  if(q.sensitive){
+    kids.push(privacyRow(q.key));
+  }
+
+  const nextBtn=h('button',{'class':'btn-primary'},'Next');
+  nextBtn.addEventListener('click',()=>{
+    if(!hasAnswer) return failValidation('Please answer this question before continuing.');
+    if(!extraOk) return failValidation('Please answer both parts before continuing.');
+    if(needsPrivacy) return failValidation('Please choose whether to include your name or keep this answer anonymous.');
+    vib(28); goNext();
+  });
   kids.push(h('div',{'class':'nav-row'},
     h('button',{'class':'btn-secondary',onClick:goBack},'Back'),
     nextBtn
@@ -756,6 +820,16 @@ function buildPayload(){
           if(P[q.key]==='named') identifiedAnswers.push(crow);
           else if(P[q.key]==='anon') anonymousAnswers.push(crow);
         } else identifiedAnswers.push(crow);
+      }
+    }
+    if(q.extra){
+      const eval_=A[q.extra.key];
+      if(eval_!==undefined&&eval_!==null&&eval_!==''){
+        const erow={section:SECTION_META[q.section].key, question_key:q.extra.key, answer:String(eval_)};
+        if(q.sensitive){
+          if(P[q.key]==='named') identifiedAnswers.push(erow);
+          else if(P[q.key]==='anon') anonymousAnswers.push(erow);
+        } else identifiedAnswers.push(erow);
       }
     }
   });
