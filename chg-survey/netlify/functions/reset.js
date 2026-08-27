@@ -1,19 +1,6 @@
-const fetch = require('node-fetch');
+const { getDatabase } = require('@netlify/database');
 
-const SB_URL = 'https://hozytvscjvnjlmzxphgk.supabase.co';
-const SB_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhvenl0dnNjanZuamxtenhwaGdrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTkwNjY2OSwiZXhwIjoyMDk1NDgyNjY5fQ.wM7ox0wZYs0Ij1iZvVBwlygmIeGqoTup-sYb1Jc1hX4';
 const RESET_PIN = '2636';
-
-async function wipe(table) {
-  const res = await fetch(SB_URL + '/rest/v1/' + table + '?id=not.is.null', {
-    method: 'DELETE',
-    headers: {
-      'apikey': SB_SERVICE_KEY,
-      'Authorization': 'Bearer ' + SB_SERVICE_KEY
-    }
-  });
-  if (!res.ok) throw new Error(await res.text());
-}
 
 exports.handler = async function(event) {
   if (event.httpMethod !== 'POST') {
@@ -28,11 +15,12 @@ exports.handler = async function(event) {
   if (body.pin !== RESET_PIN) {
     return { statusCode: 403, body: JSON.stringify({ error: 'Incorrect PIN' }) };
   }
+  const db = getDatabase();
   try {
-    await wipe('follow_up_requests');
-    await wipe('identified_answers');
-    await wipe('anonymous_answers');
-    await wipe('respondents');
+    await db.sql`DELETE FROM follow_up_requests`;
+    await db.sql`DELETE FROM identified_answers`;
+    await db.sql`DELETE FROM anonymous_answers`;
+    await db.sql`DELETE FROM respondents`;
     return { statusCode: 200, body: JSON.stringify({ success: true }) };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
