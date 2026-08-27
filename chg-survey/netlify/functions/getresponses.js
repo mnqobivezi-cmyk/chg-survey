@@ -1,30 +1,12 @@
-const fetch = require('node-fetch');
-
-const SB_URL = process.env.SB_URL;
-const SB_KEY = process.env.SB_ANON_KEY;
-
-async function getAll(table, order) {
-  const res = await fetch(
-    SB_URL + '/rest/v1/' + table + '?select=*' + (order ? '&order=' + order : ''),
-    {
-      headers: {
-        'apikey': SB_KEY,
-        'Authorization': 'Bearer ' + SB_KEY
-      }
-    }
-  );
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
+const { neon } = require('@neondatabase/serverless');
 
 exports.handler = async function() {
+  const sql = neon(process.env.NEON_DATABASE_URL);
   try {
-    const [respondents, identifiedAnswers, anonymousAnswers, followUpRequests] = await Promise.all([
-      getAll('respondents', 'submitted_at.desc'),
-      getAll('identified_answers', 'created_at.desc'),
-      getAll('anonymous_answers', 'created_at.desc'),
-      getAll('follow_up_requests', 'created_at.desc')
-    ]);
+    const respondents = await sql`SELECT * FROM respondents ORDER BY submitted_at DESC`;
+    const identifiedAnswers = await sql`SELECT * FROM identified_answers ORDER BY created_at DESC`;
+    const anonymousAnswers = await sql`SELECT * FROM anonymous_answers ORDER BY created_at DESC`;
+    const followUpRequests = await sql`SELECT * FROM follow_up_requests ORDER BY created_at DESC`;
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },

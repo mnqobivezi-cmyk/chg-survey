@@ -1,19 +1,6 @@
-const fetch = require('node-fetch');
+const { neon } = require('@neondatabase/serverless');
 
-const SB_URL = process.env.SB_URL;
-const SB_SERVICE_KEY = process.env.SB_SERVICE_ROLE_KEY;
 const RESET_PIN = '2636';
-
-async function wipe(table) {
-  const res = await fetch(SB_URL + '/rest/v1/' + table + '?id=not.is.null', {
-    method: 'DELETE',
-    headers: {
-      'apikey': SB_SERVICE_KEY,
-      'Authorization': 'Bearer ' + SB_SERVICE_KEY
-    }
-  });
-  if (!res.ok) throw new Error(await res.text());
-}
 
 exports.handler = async function(event) {
   if (event.httpMethod !== 'POST') {
@@ -28,11 +15,12 @@ exports.handler = async function(event) {
   if (body.pin !== RESET_PIN) {
     return { statusCode: 403, body: JSON.stringify({ error: 'Incorrect PIN' }) };
   }
+  const sql = neon(process.env.NEON_DATABASE_URL);
   try {
-    await wipe('follow_up_requests');
-    await wipe('identified_answers');
-    await wipe('anonymous_answers');
-    await wipe('respondents');
+    await sql`DELETE FROM follow_up_requests`;
+    await sql`DELETE FROM identified_answers`;
+    await sql`DELETE FROM anonymous_answers`;
+    await sql`DELETE FROM respondents`;
     return { statusCode: 200, body: JSON.stringify({ success: true }) };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };

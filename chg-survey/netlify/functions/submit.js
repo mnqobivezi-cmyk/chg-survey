@@ -1,20 +1,4 @@
-const fetch = require('node-fetch');
-
-const SB_URL = process.env.SB_URL;
-const SB_KEY = process.env.SB_ANON_KEY;
-
-async function sb(path, options) {
-  const res = await fetch(SB_URL + path, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + SB_KEY,
-      ...(options && options.headers ? options.headers : {})
-    }
-  });
-  return res;
-}
+const { neon } = require('@neondatabase/serverless');
 
 exports.handler = async function(event) {
   if (event.httpMethod !== 'POST') {
@@ -29,55 +13,49 @@ exports.handler = async function(event) {
   }
 
   const { respondent, identifiedAnswers, anonymousAnswers, followUp } = payload;
+  const sql = neon(process.env.NEON_DATABASE_URL);
 
   try {
-    const respRes = await sb('/rest/v1/respondents', {
-      method: 'POST',
-      headers: { 'Prefer': 'return=representation' },
-      body: JSON.stringify(respondent)
-    });
-    if (!respRes.ok) {
-      const text = await respRes.text();
-      return { statusCode: respRes.status, body: text };
-    }
-    const respData = await respRes.json();
-    const respondentId = respData[0] && respData[0].id;
+    const [row] = await sql`
+      INSERT INTO respondents (
+        first_name, surname, gender, date_of_birth, phone,
+        formatted_address, suburb, city, province, postal_code,
+        latitude, longitude, knows_cell_group, submitted_at, device
+      ) VALUES (
+        ${respondent.first_name}, ${respondent.surname}, ${respondent.gender},
+        ${respondent.date_of_birth}, ${respondent.phone},
+        ${respondent.formatted_address}, ${respondent.suburb}, ${respondent.city},
+        ${respondent.province}, ${respondent.postal_code},
+        ${respondent.latitude}, ${respondent.longitude}, ${respondent.knows_cell_group},
+        ${respondent.submitted_at}, ${respondent.device}
+      )
+      RETURNING id
+    `;
+    const respondentId = row.id;
 
-    if (Array.isArray(identifiedAnswers) && identifiedAnswers.length) {
-      const rows = identifiedAnswers.map(a => ({ ...a, respondent_id: respondentId }));
-      const r = await sb('/rest/v1/identified_answers', {
-        method: 'POST',
-        headers: { 'Prefer': 'return=minimal' },
-        body: JSON.stringify(rows)
-      });
-      if (!r.ok) {
-        const text = await r.text();
-        return { statusCode: r.status, body: text };
+    if (Array.isArray(identifiedAnswers)) {
+      for (const a of identifiedAnswers) {
+        await sql`
+          INSERT INTO identified_answers (respondent_id, section, question_key, answer)
+          VALUES (${respondentId}, ${a.section}, ${a.question_key}, ${a.answer})
+        `;
       }
     }
 
-    if (Array.isArray(anonymousAnswers) && anonymousAnswers.length) {
-      const r = await sb('/rest/v1/anonymous_answers', {
-        method: 'POST',
-        headers: { 'Prefer': 'return=minimal' },
-        body: JSON.stringify(anonymousAnswers)
-      });
-      if (!r.ok) {
-        const text = await r.text();
-        return { statusCode: r.status, body: text };
+    if (Array.isArray(anonymousAnswers)) {
+      for (const a of anonymousAnswers) {
+        await sql`
+          INSERT INTO anonymous_answers (section, question_key, answer)
+          VALUES (${a.section}, ${a.question_key}, ${a.answer})
+        `;
       }
     }
 
     if (followUp && followUp.topic) {
-      const r = await sb('/rest/v1/follow_up_requests', {
-        method: 'POST',
-        headers: { 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ respondent_id: respondentId, topic: followUp.topic })
-      });
-      if (!r.ok) {
-        const text = await r.text();
-        return { statusCode: r.status, body: text };
-      }
+      await sql`
+        INSERT INTO follow_up_requests (respondent_id, topic)
+        VALUES (${respondentId}, ${followUp.topic})
+      `;
     }
 
     return { statusCode: 200, body: JSON.stringify({ success: true, respondentId }) };
