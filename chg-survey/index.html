@@ -11,6 +11,12 @@
   s.onload=function(){window._pptxReady=true;};
   document.head.appendChild(s);
 })();
+(function(){
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+  s.onload=function(){window._xlsxReady=true;};
+  document.head.appendChild(s);
+})();
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -361,9 +367,9 @@ const QUESTIONS = [
   // Section 9 - feedback
   {section:8, key:'feedback_comms', sensitive:false, type:'multichips',
     label:'How do you prefer to receive branch communications?',
-    options:['WhatsApp','Email','Phone call','In person','Notice board']},
+    options:['WhatsApp','Email','Announcements during church services','Social media','SMS','Other']},
   {section:8, key:'feedback_good', sensitive:true, type:'text',
-    label:'What is the branch doing well?'},
+    label:'What in your opinion is the branch doing well?'},
   {section:8, key:'feedback_improve', sensitive:true, type:'text',
     label:'What practical improvement would you like to see?'},
   {section:8, key:'feedback_other', sensitive:true, type:'text', optional:true,
@@ -391,16 +397,20 @@ function buildSteps(A){
 const A = {}; // answers
 const P = {}; // privacy per sensitive key: 'named' | 'anon'
 const S = {
-  mode: window.location.search.includes('admin') ? (sessionStorage.getItem('adminAuthed')==='true' ? 'admin' : 'adminlogin') : 'survey',
+  mode: window.location.search.includes('admin') ? (sessionStorage.getItem('adminAuthed')==='true' ? 'admin' : 'adminlogin')
+        : window.location.search.includes('lookup') ? 'lookup' : 'survey',
   stepIdx:0, dir:'forward', inSelect:false,
-  addrQuery:'', addrResults:[], addrLoading:false,
+  addrQuery:'', addrResults:[], addrLoading:false, addrManual:false,
   submitting:false, submitError:'',
   adminAuthed: sessionStorage.getItem('adminAuthed')==='true',
   adminTab:0, adminPwInput:'', adminPwError:'',
   data:null, loadingData:false,
   showResetModal:false, resetPinDigits:'', resetError:'', resetting:false,
   suburbFilter:'', cellgroupFilter:'',
-  errorMsg:'', errorStep:-1
+  errorMsg:'', errorStep:-1,
+  cgGroupCount:4, cgGroupNames:[], cgAllocations:{}, cgMethod:{}, cgSaving:false, cgSaved:false,
+  lkFirst:'', lkSurname:'', lkPhone:'', lkResult:null, lkLoading:false, lkError:'',
+  lkDisputeOpen:false, lkDisputeMsg:'', lkDisputeSent:false
 };
 
 function currentSteps(){ return buildSteps(A); }
@@ -426,6 +436,7 @@ function render(){
   let c;
   if(S.mode==='adminlogin') c=renderAdminLogin();
   else if(S.mode==='admin'&&S.adminAuthed) c=renderAdminDash();
+  else if(S.mode==='lookup') c=renderLookup();
   else c=renderSurveyStep();
   app.appendChild(c);
   if(c && typeof c.scrollTop==='number') c.scrollTop=0;
@@ -556,7 +567,7 @@ function renderAddress(){
     addrTimer=setTimeout(async ()=>{
       S.addrLoading=true; renderInline();
       try{
-        const res=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(S.addrQuery)+'&countrycodes=za&format=json&addressdetails=1&limit=5');
+        const res=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(S.addrQuery)+'&countrycodes=za&format=json&addressdetails=1&limit=5&viewbox=27.0,-25.4,29.1,-26.9&bounded=1');
         S.addrResults=await res.json();
       }catch(err){ S.addrResults=[]; }
       S.addrLoading=false; renderInline();
@@ -592,21 +603,55 @@ function renderAddress(){
 
   const nextBtn=h('button',{'class':'btn-primary'},'Next');
   nextBtn.addEventListener('click',()=>{
-    if(!A.address_confirmed) return failValidation('Please select your address from the list.');
+    if(S.addrManual){
+      const m=A.manual_address||{};
+      if(!(m.street&&m.street.trim())) return failValidation('Please enter your street name and number.');
+      if(!(m.suburb&&m.suburb.trim())) return failValidation('Please enter your suburb.');
+      if(!(m.city&&m.city.trim())) return failValidation('Please enter your city or town.');
+      A.address_confirmed={
+        formatted_address:[m.street,m.suburb,m.city,m.province].filter(Boolean).join(', '),
+        street:m.street||'', suburb:m.suburb||'', city:m.city||'', province:m.province||'', postal_code:m.postal_code||'',
+        latitude:null, longitude:null
+      };
+      vib(28); goNext(); return;
+    }
+    if(!A.address_confirmed) return failValidation('Please select your address from the list, or enter it manually below.');
     vib(28); goNext();
   });
 
   const kids=[
     h('div',{'class':'q-label'},sec.title),
     h('h2',{},'Residential address'),
-    h('p',{'class':'subtitle'},'Select your address from the list — free text is not accepted.'),
+    h('p',{'class':'subtitle'},'Select your address from the list below.'),
     input
   ];
-  if(A.address_confirmed){
+  if(A.address_confirmed && !S.addrManual){
     kids.push(h('div',{'class':'addr-confirmed'},svgCircleCheck(),h('span',{},A.address_confirmed.formatted_address)));
-  } else {
+  } else if(!S.addrManual) {
     kids.push(resultsWrap);
   }
+
+  if(!S.addrManual){
+    const manualLink=h('button',{'class':'btn-secondary','style':'font-size:12px;margin-top:2px'},"Can't find your address? Enter it manually");
+    manualLink.addEventListener('click',()=>{vib(22);S.addrManual=true;A.address_confirmed=null;A.manual_address=A.manual_address||{};render();});
+    kids.push(manualLink);
+  } else {
+    A.manual_address=A.manual_address||{};
+    const streetInp=h('input',{type:'text',placeholder:'Street name and number',value:A.manual_address.street||''});
+    streetInp.addEventListener('input',e=>{A.manual_address.street=e.target.value;clearErr();});
+    const suburbInp=h('input',{type:'text',placeholder:'Suburb',value:A.manual_address.suburb||''});
+    suburbInp.addEventListener('input',e=>{A.manual_address.suburb=e.target.value;clearErr();});
+    const cityInp=h('input',{type:'text',placeholder:'City / Town',value:A.manual_address.city||''});
+    cityInp.addEventListener('input',e=>{A.manual_address.city=e.target.value;clearErr();});
+    const provInp=h('input',{type:'text',placeholder:'Province',value:A.manual_address.province||''});
+    provInp.addEventListener('input',e=>{A.manual_address.province=e.target.value;clearErr();});
+    const postInp=h('input',{type:'text',placeholder:'Postal code (optional)',value:A.manual_address.postal_code||''});
+    postInp.addEventListener('input',e=>{A.manual_address.postal_code=e.target.value;clearErr();});
+    const backToSearch=h('button',{'class':'btn-secondary','style':'font-size:12px'},'Search for my address instead');
+    backToSearch.addEventListener('click',()=>{vib(22);S.addrManual=false;A.manual_address=null;render();});
+    kids.push(streetInp,suburbInp,cityInp,provInp,postInp,backToSearch);
+  }
+
   kids.push(h('div',{'class':'nav-row'},
     h('button',{'class':'btn-secondary',onClick:goBack},'Back'),
     nextBtn
@@ -620,23 +665,30 @@ function renderCellGroup(){
   const opts=h('div',{'class':'options'},...['Yes','No'].map(o=>{
     const sel=A.knows_cell_group===(o==='Yes');
     const btn=h('button',{'class':'opt'+(sel?' selected':'')},h('span',{'class':'opt-ring'},sel?svgCheck():''),o);
-    btn.addEventListener('click',()=>{vib(22);A.knows_cell_group=(o==='Yes');reselect(()=>{});});
+    btn.addEventListener('click',()=>{vib(22);A.knows_cell_group=(o==='Yes');if(o!=='Yes')A.stated_cell_group='';reselect(()=>{});});
     return btn;
   }));
+  const kids=[
+    h('div',{'class':'q-label'},sec.title),
+    h('h2',{},'Do you know which Cell Group you belong to?'),
+    opts
+  ];
+  if(A.knows_cell_group===true){
+    const nameInp=h('input',{type:'text',placeholder:'e.g. Ekurhuleni Cell Group',value:A.stated_cell_group||''});
+    nameInp.addEventListener('input',e=>{A.stated_cell_group=e.target.value;clearErr();});
+    kids.push(h('h2',{'style':'font-size:14px;margin-top:4px'},'What is your Cell Group called?'), nameInp);
+  }
   const nextBtn=h('button',{'class':'btn-primary'},'Next');
   nextBtn.addEventListener('click',()=>{
     if(A.knows_cell_group===undefined||A.knows_cell_group===null) return failValidation('Please select an answer.');
+    if(A.knows_cell_group===true&&!(A.stated_cell_group&&A.stated_cell_group.trim())) return failValidation('Please tell us your Cell Group name.');
     vib(28); goNext();
   });
-  return screenWrap([
-    h('div',{'class':'q-label'},sec.title),
-    h('h2',{},'Do you know which Cell Group you belong to?'),
-    opts,
-    h('div',{'class':'nav-row'},
-      h('button',{'class':'btn-secondary',onClick:goBack},'Back'),
-      nextBtn
-    )
-  ],sec.color,sectionProgress(1));
+  kids.push(h('div',{'class':'nav-row'},
+    h('button',{'class':'btn-secondary',onClick:goBack},'Back'),
+    nextBtn
+  ));
+  return screenWrap(kids,sec.color,sectionProgress(1));
 }
 
 /* ---- generic sensitive/generic question renderer ---- */
@@ -772,12 +824,15 @@ function renderReview(){
 
 function renderThanks(){
   document.documentElement.style.setProperty('--acc','#7ecfdc');
+  const lookupLink=h('button',{'class':'btn-secondary','style':'font-size:12px'},'Find My Cell Group Later');
+  lookupLink.addEventListener('click',()=>{window.location.href='?lookup=true';});
   return h('div',{'class':'screen center'},
     h('div',{'class':'card fade-u'},
       logo(),
       h('h1',{'style':'text-align:center'},'Thank You'),
       h('div',{'class':'divider'}),
-      h('p',{'class':'subtitle','style':'text-align:center'},'Your responses have been received. Thank you for helping strengthen the Othandweni Branch fellowship.')
+      h('p',{'class':'subtitle','style':'text-align:center'},'Your responses have been received. Thank you for helping strengthen the Othandweni Branch fellowship.'),
+      lookupLink
     )
   );
 }
@@ -788,6 +843,7 @@ function buildPayload(){
     date_of_birth: A.dob_year&&A.dob_month&&A.dob_day ? (A.dob_year+'-'+String(['January','February','March','April','May','June','July','August','September','October','November','December'].indexOf(A.dob_month)+1).padStart(2,'0')+'-'+String(A.dob_day).padStart(2,'0')) : null,
     phone:A.phone||null,
     formatted_address: A.address_confirmed?A.address_confirmed.formatted_address:null,
+    street: A.address_confirmed?(A.address_confirmed.street||null):null,
     suburb: A.address_confirmed?A.address_confirmed.suburb:null,
     city: A.address_confirmed?A.address_confirmed.city:null,
     province: A.address_confirmed?A.address_confirmed.province:null,
@@ -795,6 +851,7 @@ function buildPayload(){
     latitude: A.address_confirmed?A.address_confirmed.latitude:null,
     longitude: A.address_confirmed?A.address_confirmed.longitude:null,
     knows_cell_group: A.knows_cell_group!==undefined?A.knows_cell_group:null,
+    stated_cell_group: A.stated_cell_group||null,
     submitted_at:new Date().toISOString(),
     device:/mobile|android|iphone|ipad/i.test(navigator.userAgent)?'mobile':'desktop'
   };
@@ -853,6 +910,82 @@ async function submitForm(){
   }catch(e){ S.submitting=false; S.submitError='Error: '+e.message; render(); }
 }
 
+/* ================= CELL GROUP LOOKUP (public) ================= */
+function renderLookup(){
+  document.documentElement.style.setProperty('--acc','#7ecfdc');
+  const fnInp=h('input',{type:'text',placeholder:'First name',value:S.lkFirst});
+  fnInp.addEventListener('input',e=>{S.lkFirst=e.target.value;});
+  const snInp=h('input',{type:'text',placeholder:'Surname',value:S.lkSurname});
+  snInp.addEventListener('input',e=>{S.lkSurname=e.target.value;});
+  const phInp=h('input',{type:'tel',placeholder:'Phone number',value:S.lkPhone});
+  phInp.addEventListener('input',e=>{S.lkPhone=e.target.value;});
+
+  async function doLookup(){
+    if(!S.lkFirst.trim()||!S.lkSurname.trim()||!S.lkPhone.trim()){ S.lkError='Please fill in all fields.'; render(); return; }
+    S.lkLoading=true; S.lkError=''; S.lkResult=null; render();
+    try{
+      const res=await fetch('/.netlify/functions/lookup-group',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({first_name:S.lkFirst,surname:S.lkSurname,phone:S.lkPhone})
+      });
+      const data=await res.json();
+      S.lkLoading=false;
+      if(!data.found){ S.lkError='We could not find a matching survey response with those details.'; }
+      else { S.lkResult=data; vib(28); }
+      render();
+    }catch(e){ S.lkLoading=false; S.lkError='Something went wrong. Please try again.'; render(); }
+  }
+
+  async function doDispute(){
+    S.lkDisputeSent=false;
+    try{
+      await fetch('/.netlify/functions/dispute-group',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({respondentId:S.lkResult.respondentId, message:S.lkDisputeMsg})
+      });
+      vib([50,30,50]); S.lkDisputeSent=true; render();
+    }catch(e){}
+  }
+
+  const kids=[
+    logo(),
+    h('h1',{'style':'text-align:center'},'Find My Cell Group'),
+    h('div',{'class':'divider'}),
+    h('p',{'class':'subtitle','style':'text-align:center'},'Enter the same details you used in the survey to find out which Cell Group you have been placed in.'),
+    fnInp, snInp, phInp
+  ];
+  if(S.lkError) kids.push(h('div',{'class':'err'},S.lkError));
+
+  if(S.lkResult){
+    if(S.lkResult.groupName){
+      kids.push(h('div',{'class':'addr-confirmed'},svgCircleCheck(),h('span',{},'You have been placed in: '+S.lkResult.groupName)));
+    } else {
+      kids.push(h('div',{'class':'alert'},'Your response was found, but Cell Group allocations have not been finalised yet. Please check back later.'));
+    }
+    if(!S.lkDisputeOpen && !S.lkDisputeSent){
+      const disputeBtn=h('button',{'class':'btn-secondary'},"This doesn't look right");
+      disputeBtn.addEventListener('click',()=>{vib(22);S.lkDisputeOpen=true;render();});
+      kids.push(disputeBtn);
+    } else if(S.lkDisputeOpen && !S.lkDisputeSent){
+      const ta=h('textarea',{rows:'3',placeholder:'Tell us why (optional)'},S.lkDisputeMsg);
+      ta.addEventListener('input',e=>{S.lkDisputeMsg=e.target.value;});
+      const sendBtn=h('button',{'class':'btn-primary'},'Submit Dispute');
+      sendBtn.addEventListener('click',doDispute);
+      kids.push(ta,sendBtn);
+    } else if(S.lkDisputeSent){
+      kids.push(h('div',{'class':'addr-confirmed'},svgCircleCheck(),h('span',{},'Thank you — leadership will review your request.')));
+    }
+  } else {
+    const findBtn=h('button',{'class':'btn-primary',...(S.lkLoading?{disabled:''}:{})},S.lkLoading?'Searching...':'Find My Cell Group');
+    findBtn.addEventListener('click',doLookup);
+    kids.push(findBtn);
+  }
+
+  kids.push(h('button',{'class':'btn-secondary','style':'font-size:12px;opacity:.6',onClick:()=>{window.location.href=window.location.pathname;}},'Back to Survey'));
+
+  return h('div',{'class':'screen center'},h('div',{'class':'card fade-u'},...kids));
+}
+
 /* ================= ADMIN ================= */
 function renderAdminLogin(){
   document.documentElement.style.setProperty('--acc','#7ecfdc');
@@ -884,6 +1017,14 @@ async function loadAdminData(){
     const res=await fetch('/.netlify/functions/getresponses');
     S.data=await res.json();
   }catch(e){ S.data={respondents:[],identifiedAnswers:[],anonymousAnswers:[],followUpRequests:[]}; }
+  if(S.data.cellGroupSettings && S.data.cellGroupSettings.length){
+    S.cgGroupNames=S.data.cellGroupSettings.slice();
+    S.cgGroupCount=S.cgGroupNames.length;
+  } else if(!S.cgGroupNames.length){
+    S.cgGroupNames=Array.from({length:S.cgGroupCount},(_,i)=>'Cell Group '+String.fromCharCode(65+i));
+  }
+  S.cgAllocations={};
+  (S.data.cellGroupAllocations||[]).forEach(a=>{ S.cgAllocations[a.respondent_id]=a.group_name; });
   S.loadingData=false; render();
 }
 
@@ -894,7 +1035,7 @@ function renderAdminDash(){
     h('div',{},h('div',{'class':'admin-title'},'Othandweni Branch Survey — Admin'),h('div',{'class':'admin-sub'},'Response insights and congregation overview')),
     h('button',{'class':'logout-btn',onClick:()=>{sessionStorage.removeItem('adminAuthed');S.adminAuthed=false;S.mode='survey';S.stepIdx=0;render();}},'Log Out')
   ));
-  const tabs=['Survey Insights','Congregation and Cell Groups','Follow-up Requests'];
+  const tabs=['Survey Insights','Congregation and Cell Groups','Follow-up Requests','Cell Group Allocation'];
   wrap.appendChild(h('div',{'class':'tab-row'},...tabs.map((t,i)=>{
     const btn=h('button',{'class':'tab-btn'+(S.adminTab===i?' active':'')},t);
     btn.addEventListener('click',()=>{S.adminTab=i;render();});
@@ -909,6 +1050,7 @@ function renderAdminDash(){
   if(S.adminTab===0) wrap.appendChild(renderInsightsTab());
   if(S.adminTab===1) wrap.appendChild(renderCongregationTab());
   if(S.adminTab===2) wrap.appendChild(renderFollowUpTab());
+  if(S.adminTab===3) wrap.appendChild(renderCellGroupAllocationTab());
 
   if(S.showResetModal) wrap.appendChild(renderResetModal());
   return wrap;
@@ -920,17 +1062,26 @@ function allAnswersFor(key){
   return id.concat(an);
 }
 
-function barChart(title,options,counts){
+function warmCool(t){
+  const cool=[0,178,166], warm=[224,86,86];
+  const c=cool.map((v,i)=>Math.round(v+(warm[i]-v)*t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+function barChart(title,options,counts,sentiment){
   const max=Math.max(1,...counts);
   return h('div',{'class':'chart-card'},
     h('div',{'class':'chart-title'},title),
-    h('div',{'class':'bar-wrap'},...options.map((o,i)=>
-      h('div',{'class':'bar-row'},
+    h('div',{'class':'bar-wrap'},...options.map((o,i)=>{
+      const fillStyle = sentiment
+        ? `width:${(counts[i]/max)*100}%;background:${warmCool(options.length>1?i/(options.length-1):0)}`
+        : `width:${(counts[i]/max)*100}%;background:linear-gradient(90deg,#007a8a,#00d4ff)`;
+      return h('div',{'class':'bar-row'},
         h('div',{'class':'bar-label'},o),
-        h('div',{'class':'bar-track'},h('div',{'class':'bar-fill','style':`width:${(counts[i]/max)*100}%;background:linear-gradient(90deg,#007a8a,#00d4ff)`})),
+        h('div',{'class':'bar-track'},h('div',{'class':'bar-fill','style':fillStyle})),
         h('div',{'class':'bar-count'},counts[i])
-      )
-    ))
+      );
+    }))
   );
 }
 
@@ -945,16 +1096,19 @@ function renderInsightsTab(){
     h('div',{'class':'stat-card'},h('div',{'class':'stat-num'},anonCount),h('div',{'class':'stat-label'},'Anonymous Answers'))
   ));
 
-  const exportBtn=h('button',{'class':'export-btn'},'Export to PowerPoint');
-  exportBtn.addEventListener('click',exportPptx);
-  frag.appendChild(exportBtn);
+  const exportPptxBtn=h('button',{'class':'export-btn','style':'flex:1;margin-bottom:0'},'Export to PowerPoint');
+  exportPptxBtn.addEventListener('click',exportPptx);
+  const exportXlsxBtn=h('button',{'class':'export-btn','style':'flex:1;margin-bottom:0'},'Export to Excel');
+  exportXlsxBtn.addEventListener('click',exportExcel);
+  frag.appendChild(h('div',{'style':'display:flex;gap:10px;margin-bottom:16px'},exportPptxBtn,exportXlsxBtn));
 
   const grid=h('div',{'class':'charts-grid'});
+  const sentimentKeys=['welcomed','cellgroup_connection','presabbath_feeling','serving_supported'];
   QUESTIONS.filter(q=>['select','chips','multichips','rating','wheel'].includes(q.type)).forEach(q=>{
     const answers=allAnswersFor(q.key);
     if(!answers.length) return;
     const counts=q.options.map(o=>answers.filter(a=>a.split(', ').includes(o)).length);
-    grid.appendChild(barChart(q.label,q.options,counts));
+    grid.appendChild(barChart(q.label,q.options,counts,sentimentKeys.includes(q.key)));
   });
   // knows cell group donut
   const yes=S.data.respondents.filter(r=>r.knows_cell_group===true).length;
@@ -1036,6 +1190,151 @@ function renderFollowUpTab(){
   return frag;
 }
 
+/* ---- Cell Group Allocation (AI-assisted geographic clustering) ---- */
+function kmeansCluster(points, k, iterations){
+  if(!points.length) return {};
+  iterations = iterations || 12;
+  const shuffled = points.slice().sort(()=>Math.random()-0.5);
+  let centroids = [];
+  for(let i=0;i<k;i++) centroids.push({lat:shuffled[i%shuffled.length].lat, lng:shuffled[i%shuffled.length].lng});
+  let assignments = {};
+  for(let iter=0; iter<iterations; iter++){
+    assignments = {};
+    points.forEach(p=>{
+      let best=0, bestDist=Infinity;
+      centroids.forEach((c,ci)=>{
+        const d=(p.lat-c.lat)*(p.lat-c.lat)+(p.lng-c.lng)*(p.lng-c.lng);
+        if(d<bestDist){ bestDist=d; best=ci; }
+      });
+      assignments[p.id]=best;
+    });
+    const sums=centroids.map(()=>({lat:0,lng:0,n:0}));
+    points.forEach(p=>{ const ci=assignments[p.id]; sums[ci].lat+=p.lat; sums[ci].lng+=p.lng; sums[ci].n++; });
+    centroids = centroids.map((c,i)=> sums[i].n>0 ? {lat:sums[i].lat/sums[i].n, lng:sums[i].lng/sums[i].n} : c);
+  }
+  return assignments;
+}
+
+function runAiAllocation(){
+  const n=S.cgGroupNames.length;
+  const withCoords = S.data.respondents.filter(r=>r.latitude!=null && r.longitude!=null);
+  const points = withCoords.map(r=>({id:r.id, lat:parseFloat(r.latitude), lng:parseFloat(r.longitude)}));
+  const assignments = kmeansCluster(points, Math.min(n, Math.max(1,points.length)));
+  points.forEach(p=>{
+    const clusterIdx = assignments[p.id];
+    S.cgAllocations[p.id]=S.cgGroupNames[clusterIdx];
+    S.cgMethod=S.cgMethod||{}; S.cgMethod[p.id]='ai';
+  });
+  vib([50,30,50]);
+  render();
+}
+
+async function saveAllocations(){
+  S.cgSaving=true; S.cgSaved=false; render();
+  const allocations=Object.keys(S.cgAllocations).filter(id=>S.cgAllocations[id]).map(id=>({
+    respondent_id:id, group_name:S.cgAllocations[id], method:(S.cgMethod&&S.cgMethod[id])||'manual'
+  }));
+  try{
+    const res=await fetch('/.netlify/functions/save-allocations',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({adminPassword:ADMIN_PW, groupNames:S.cgGroupNames, allocations})
+    });
+    S.cgSaving=false;
+    if(res.ok){ vib([50,30,50]); S.cgSaved=true; }
+    render();
+  }catch(e){ S.cgSaving=false; render(); }
+}
+
+function exportAllocationsExcel(){
+  if(!window._xlsxReady || !window.XLSX){ alert('Export library still loading, please try again in a moment.'); return; }
+  const rows=S.data.respondents.map(r=>({
+    'First Name':r.first_name, 'Surname':r.surname, 'Phone':r.phone,
+    'Suburb':r.suburb, 'City':r.city,
+    'Assigned Cell Group':S.cgAllocations[r.id]||'Unassigned'
+  }));
+  const wb=window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(rows), 'Cell Group Allocations');
+  window.XLSX.writeFile(wb, 'Othandweni-Cell-Group-Allocations.xlsx');
+}
+
+function renderCellGroupAllocationTab(){
+  const frag=h('div',{});
+  frag.appendChild(h('p',{'style':'color:var(--muted);font-size:13px;margin-bottom:14px;line-height:1.6'},
+    'Group congregants into Cell Groups based on where they live. Choose how many groups you want (4–6), optionally rename them, then let the system suggest groupings by area — or assign people manually below.'));
+
+  const countSel=h('select',{'class':'filter-select'});
+  [4,5,6].forEach(n=>{
+    const opt=h('option',{value:n},n+' groups');
+    if(n===S.cgGroupCount) opt.selected=true;
+    countSel.appendChild(opt);
+  });
+  countSel.addEventListener('change',e=>{
+    const n=parseInt(e.target.value,10);
+    const old=S.cgGroupNames;
+    S.cgGroupCount=n;
+    S.cgGroupNames=Array.from({length:n},(_,i)=>old[i]||('Cell Group '+String.fromCharCode(65+i)));
+    render();
+  });
+  frag.appendChild(h('div',{'class':'filter-row'},h('div',{'style':'font-size:13px;color:var(--muted);align-self:center'},'Number of Cell Groups:'),countSel));
+
+  const nameInputs=h('div',{'class':'filter-row','style':'flex-wrap:wrap'});
+  S.cgGroupNames.forEach((name,i)=>{
+    const inp=h('input',{type:'text',value:name,'style':'width:160px;margin-bottom:0'});
+    inp.addEventListener('input',e=>{S.cgGroupNames[i]=e.target.value;});
+    nameInputs.appendChild(inp);
+  });
+  frag.appendChild(nameInputs);
+
+  const withCoords=S.data.respondents.filter(r=>r.latitude!=null&&r.longitude!=null).length;
+  const withoutCoords=S.data.respondents.length-withCoords;
+  frag.appendChild(h('p',{'style':'font-size:12px;color:var(--muted);margin:10px 0'},
+    withCoords+' respondent(s) have a mapped address and can be auto-allocated by area.'+
+    (withoutCoords?(' '+withoutCoords+' entered their address manually and will need manual allocation.'):'')));
+
+  const aiBtn=h('button',{'class':'export-btn'},'Suggest Allocation by Area');
+  aiBtn.addEventListener('click',runAiAllocation);
+  frag.appendChild(aiBtn);
+
+  const counts={};
+  S.cgGroupNames.forEach(n=>counts[n]=0);
+  Object.values(S.cgAllocations).forEach(g=>{ if(g) counts[g]=(counts[g]||0)+1; });
+  frag.appendChild(h('div',{'class':'suburb-counts'},...Object.entries(counts).map(([g,c])=>
+    h('div',{'class':'suburb-chip'},g+': ',h('b',{},c))
+  )));
+
+  const table=h('table',{},
+    h('thead',{},h('tr',{},h('th',{},'Name'),h('th',{},'Suburb'),h('th',{},'Assigned Group'))),
+    h('tbody',{},...S.data.respondents.map(r=>{
+      const sel=h('select',{'class':'filter-select','style':'font-size:12px;padding:6px 8px'});
+      sel.appendChild(h('option',{value:''},'Unassigned'));
+      S.cgGroupNames.forEach(name=>{
+        const opt=h('option',{value:name},name);
+        if(S.cgAllocations[r.id]===name) opt.selected=true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener('change',e=>{
+        S.cgAllocations[r.id]=e.target.value||null;
+        S.cgMethod=S.cgMethod||{}; S.cgMethod[r.id]='manual';
+      });
+      return h('tr',{},
+        h('td',{},(r.first_name||'')+' '+(r.surname||'')),
+        h('td',{},r.suburb||'-'),
+        h('td',{},sel)
+      );
+    }))
+  );
+  frag.appendChild(h('div',{'class':'table-wrap'},table));
+
+  const saveBtn=h('button',{'class':'export-btn','style':'flex:1;margin-bottom:0',...(S.cgSaving?{disabled:''}:{})},S.cgSaving?'Saving...':'Save Allocations');
+  saveBtn.addEventListener('click',saveAllocations);
+  const exportBtn=h('button',{'class':'export-btn','style':'flex:1;margin-bottom:0'},'Export to Excel');
+  exportBtn.addEventListener('click',exportAllocationsExcel);
+  frag.appendChild(h('div',{'style':'display:flex;gap:10px;margin-top:14px'},saveBtn,exportBtn));
+  if(S.cgSaved) frag.appendChild(h('p',{'style':'color:#7ecfdc;font-size:12px;margin-top:8px'},'Saved. Congregants can now look up their group.'));
+
+  return frag;
+}
+
 function renderResetModal(){
   const digits=S.resetPinDigits;
   function key(d){
@@ -1110,6 +1409,39 @@ async function exportPptx(){
   });
 
   await pptx.writeFile({fileName:'Othandweni-Branch-Survey-Insights.pptx'});
+}
+
+function exportExcel(){
+  if(!window._xlsxReady || !window.XLSX){ alert('Export library still loading, please try again in a moment.'); return; }
+  const wb=window.XLSX.utils.book_new();
+
+  const respRows=S.data.respondents.map(r=>({
+    'First Name':r.first_name,'Surname':r.surname,'Gender':r.gender,
+    'Date of Birth':r.date_of_birth?String(r.date_of_birth).slice(0,10):'',
+    'Phone':r.phone,'Suburb':r.suburb,'City':r.city,'Province':r.province,
+    'Knows Cell Group':r.knows_cell_group===true?'Yes':r.knows_cell_group===false?'No':'',
+    'Stated Cell Group':r.stated_cell_group||'',
+    'Submitted At':r.submitted_at?new Date(r.submitted_at).toLocaleString():''
+  }));
+  window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(respRows), 'Respondents');
+
+  const idRows=(S.data.identifiedAnswers||[]).map(a=>({Section:a.section,Question:a.question_key,Answer:a.answer}));
+  window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(idRows), 'Named Answers');
+
+  const anonRows=(S.data.anonymousAnswers||[]).map(a=>({Section:a.section,Question:a.question_key,Answer:a.answer}));
+  window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(anonRows), 'Anonymous Answers');
+
+  const summaryRows=[];
+  QUESTIONS.filter(q=>['select','chips','multichips','rating','wheel'].includes(q.type)).forEach(q=>{
+    const answers=allAnswersFor(q.key);
+    if(!answers.length) return;
+    q.options.forEach(o=>{
+      summaryRows.push({Question:q.label,Option:o,Count:answers.filter(a=>a.split(', ').includes(o)).length});
+    });
+  });
+  window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(summaryRows), 'Summary');
+
+  window.XLSX.writeFile(wb, 'Othandweni-Branch-Survey-Insights.xlsx');
 }
 
 render();

@@ -19,15 +19,15 @@ exports.handler = async function(event) {
     const [row] = await sql`
       INSERT INTO respondents (
         first_name, surname, gender, date_of_birth, phone,
-        formatted_address, suburb, city, province, postal_code,
-        latitude, longitude, knows_cell_group, submitted_at, device
+        formatted_address, street, suburb, city, province, postal_code,
+        latitude, longitude, knows_cell_group, stated_cell_group, submitted_at, device
       ) VALUES (
         ${respondent.first_name}, ${respondent.surname}, ${respondent.gender},
         ${respondent.date_of_birth}, ${respondent.phone},
-        ${respondent.formatted_address}, ${respondent.suburb}, ${respondent.city},
+        ${respondent.formatted_address}, ${respondent.street}, ${respondent.suburb}, ${respondent.city},
         ${respondent.province}, ${respondent.postal_code},
         ${respondent.latitude}, ${respondent.longitude}, ${respondent.knows_cell_group},
-        ${respondent.submitted_at}, ${respondent.device}
+        ${respondent.stated_cell_group}, ${respondent.submitted_at}, ${respondent.device}
       )
       RETURNING id
     `;
