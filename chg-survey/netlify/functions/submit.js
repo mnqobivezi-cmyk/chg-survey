@@ -33,29 +33,35 @@ exports.handler = async function(event) {
     `;
     const respondentId = row.id;
 
+    const queries = [];
+
     if (Array.isArray(identifiedAnswers)) {
-      for (const a of identifiedAnswers) {
-        await sql`
+      identifiedAnswers.forEach(a => {
+        queries.push(sql`
           INSERT INTO identified_answers (respondent_id, section, question_key, answer)
           VALUES (${respondentId}, ${a.section}, ${a.question_key}, ${a.answer})
-        `;
-      }
+        `);
+      });
     }
 
     if (Array.isArray(anonymousAnswers)) {
-      for (const a of anonymousAnswers) {
-        await sql`
+      anonymousAnswers.forEach(a => {
+        queries.push(sql`
           INSERT INTO anonymous_answers (section, question_key, answer)
           VALUES (${a.section}, ${a.question_key}, ${a.answer})
-        `;
-      }
+        `);
+      });
     }
 
     if (followUp && followUp.topic) {
-      await sql`
+      queries.push(sql`
         INSERT INTO follow_up_requests (respondent_id, topic)
         VALUES (${respondentId}, ${followUp.topic})
-      `;
+      `);
+    }
+
+    if (queries.length) {
+      await sql.transaction(queries);
     }
 
     return { statusCode: 200, body: JSON.stringify({ success: true, respondentId }) };
