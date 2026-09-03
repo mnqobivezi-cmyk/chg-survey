@@ -347,7 +347,7 @@ const QUESTIONS = [
     label:'How do you feel about the weekly online Pre-Sabbath gatherings?',
     options:['Love it','Enjoy it','Neutral','I did not know we had them','Needs improvement'],
     conditional:{showIf:A=>A.presabbath_feeling==='Needs improvement',key:'presabbath_improve',type:'text',label:'What improvement would you like to see?'}},
-  {section:3, key:'presabbath_inperson', sensitive:true, type:'select',
+  {section:3, key:'presabbath_inperson', sensitive:false, type:'select',
     label:'Would you like occasional in-person Pre-Sabbath gatherings?',
     options:['Yes','No','Sometimes'],
     conditional:{showIf:A=>A.presabbath_inperson==='Yes'||A.presabbath_inperson==='Sometimes',key:'presabbath_frequency',type:'wheel',label:'How often would you prefer?',options:['Monthly','Every 2 months','Quarterly','Special occasions only']}},
@@ -370,7 +370,8 @@ const QUESTIONS = [
   // Section 6 - fellowship
   {section:5, key:'fellowship_activities', sensitive:false, type:'multichips',
     label:'What activities would you like to see in the branch?',
-    options:['Fellowship events','Prayer Sundays','Bible study sessions','Youth activities','Family gatherings','Outreach programmes','Sports and recreation','Arts and culture']},
+    hint:'You can choose more than one.',
+    options:['Young adults’ gatherings','Children’s activities','Men’s fellowship','Women’s fellowship','Couples’ gatherings','Singles’ gatherings','Family gatherings','Senior members’ activities','Fellowship events','Sunday Morning Prayers','Bible study sessions','Youth activities','Outreach programmes','Sports and recreation','Arts and culture']},
   {section:5, key:'fellowship_suggestions', sensitive:false, type:'text', optional:true,
     label:'Additional suggestions'},
   // Section 7 - serving
@@ -382,13 +383,15 @@ const QUESTIONS = [
     showIf:A=>A.serving_current==='Yes'},
   {section:6, key:'serving_involvement', sensitive:false, type:'multichips',
     label:'Would you like to get more involved?',
-    options:['Hosting','Sharing the word','Worship','Teaching','Outreach','Children and youth','Administration','Not at the moment']},
+    options:['Hosting','Sharing the word','Worship','Teaching','Outreach','Children and youth','Administration','Youth Ministry','Conference and Special Projects','Sanctuary Building Project','Women’s Ministry','Children’s Ministry','Music Ministry','Men’s Ministry','Outreach and Welfare Ministry, Do Good','Media, Marketing and Digital Ministry','Administration and Support','Not at the moment']},
   {section:6, key:'serving_other', sensitive:false, type:'text', optional:true,
     label:'Other involvement'},
   // Section 8 - pastoral
   {section:7, key:'pastoral_visits', sensitive:true, type:'select',
     label:'Would you appreciate more frequent home visits or pastoral support?',
-    options:['Yes','Occasionally','No']},
+    options:['Yes','Occasionally','No'],
+    privacyNote:{showIf:A=>A.pastoral_visits==='Yes'||A.pastoral_visits==='Occasionally',
+      text:'If you would like the pastoral team to contact or visit you, please select “Include my name”. The team will not be able to follow up if you keep this answer anonymous.'}},
   {section:7, key:'pastoral_support_type', sensitive:true, type:'multichips',
     label:'What type of support would you appreciate?',
     options:['Home visit','Prayer support','Counselling','Practical assistance','General check-in'],
@@ -834,6 +837,9 @@ function renderQuestion(q){
 
   const needsPrivacy=q.sensitive && !P[q.key];
   if(q.sensitive){
+    if(q.privacyNote && q.privacyNote.showIf(A)){
+      kids.push(h('p',{'class':'subtitle','style':'margin:10px 0 0'},q.privacyNote.text));
+    }
     kids.push(privacyRow(q.key));
   }
 
