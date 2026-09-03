@@ -10,6 +10,7 @@ exports.handler = async function() {
     )`;
     await sql`ALTER TABLE hidden_respondents ADD COLUMN IF NOT EXISTS visible boolean`;
     await sql`UPDATE hidden_respondents SET visible = false WHERE visible IS NULL`;
+    await sql`ALTER TABLE cell_group_allocations ADD COLUMN IF NOT EXISTS approved boolean NOT NULL DEFAULT true`;
     const respondents = await sql`SELECT * FROM respondents ORDER BY submitted_at DESC`;
     const identifiedAnswers = await sql`SELECT * FROM identified_answers ORDER BY created_at DESC`;
     const anonymousAnswers = await sql`SELECT * FROM anonymous_answers ORDER BY created_at DESC`;

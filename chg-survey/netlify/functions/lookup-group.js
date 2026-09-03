@@ -20,8 +20,9 @@ exports.handler = async function(event) {
 
   const sql = neon(process.env.NEON_DATABASE_URL);
   try {
+    await sql`ALTER TABLE cell_group_allocations ADD COLUMN IF NOT EXISTS approved boolean NOT NULL DEFAULT true`;
     const matches = await sql`
-      SELECT r.id, a.group_name
+      SELECT r.id, a.group_name, a.approved
       FROM respondents r
       LEFT JOIN cell_group_allocations a ON a.respondent_id = r.id
       WHERE lower(trim(r.first_name)) = lower(${firstName})
@@ -39,7 +40,7 @@ exports.handler = async function(event) {
       body: JSON.stringify({
         found: true,
         respondentId: m.id,
-        groupName: m.group_name || null
+        groupName: (m.group_name && m.approved !== false) ? m.group_name : null
       })
     };
   } catch (err) {
