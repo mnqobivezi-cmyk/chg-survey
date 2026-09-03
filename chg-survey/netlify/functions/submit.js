@@ -16,6 +16,9 @@ exports.handler = async function(event) {
   const sql = neon(process.env.NEON_DATABASE_URL);
 
   try {
+    if (followUp && followUp.topic) {
+      await sql`ALTER TABLE follow_up_requests ADD COLUMN IF NOT EXISTS urgency text`;
+    }
     const [row] = await sql`
       INSERT INTO respondents (
         first_name, surname, gender, date_of_birth, phone,
@@ -55,8 +58,8 @@ exports.handler = async function(event) {
 
     if (followUp && followUp.topic) {
       queries.push(sql`
-        INSERT INTO follow_up_requests (respondent_id, topic)
-        VALUES (${respondentId}, ${followUp.topic})
+        INSERT INTO follow_up_requests (respondent_id, topic, urgency)
+        VALUES (${respondentId}, ${followUp.topic}, ${followUp.urgency || null})
       `);
     }
 

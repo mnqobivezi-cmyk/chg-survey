@@ -402,6 +402,10 @@ const QUESTIONS = [
     label:'Would you like someone from leadership to contact you about this?',
     hint:'If yes, this will be linked to the name and phone number you gave at the start of the survey so leadership can reach out.',
     options:['Yes, please contact me','No, keep my response anonymous']},
+  {section:7, key:'pastoral_urgency', sensitive:false, type:'select',
+    label:'How urgent is this for you?',
+    options:['Urgent — please reach out soon','Whenever is convenient','Not urgent, just flagging'],
+    showIf:A=>A.pastoral_contact==='Yes, please contact me'},
   // Section 9 - feedback
   {section:8, key:'feedback_comms', sensitive:false, type:'multichips',
     label:'How do you prefer to receive branch communications?',
@@ -945,7 +949,7 @@ function buildPayload(){
   });
   let followUp=null;
   if(A.pastoral_contact==='Yes, please contact me'){
-    followUp={topic:'Pastoral care follow-up'};
+    followUp={topic:'Pastoral care follow-up', urgency:A.pastoral_urgency||null};
   }
   return {respondent, identifiedAnswers, anonymousAnswers, followUp};
 }
@@ -1330,15 +1334,20 @@ function renderCongregationTab(){
   return frag;
 }
 
+const URGENCY_RANK={'Urgent — please reach out soon':0,'Whenever is convenient':1,'Not urgent, just flagging':2};
+const URGENCY_COLOR={'Urgent — please reach out soon':'#e8a79d','Whenever is convenient':'#e8cc9d','Not urgent, just flagging':'#9dcce8'};
+
 function renderFollowUpTab(){
   const frag=h('div',{});
   const list=S.data.followUpRequests||[];
   if(!list.length){ frag.appendChild(h('p',{'style':'color:var(--muted);font-size:14px'},'No follow-up requests yet.')); return frag; }
   const respMap={}; S.data.respondents.forEach(r=>{respMap[r.id]=r;});
-  frag.appendChild(h('div',{'class':'sub-list'},...list.map(f=>{
+  const sorted=[...list].sort((a,b)=>(URGENCY_RANK[a.urgency]??3)-(URGENCY_RANK[b.urgency]??3));
+  frag.appendChild(h('div',{'class':'sub-list'},...sorted.map(f=>{
     const r=respMap[f.respondent_id]||{};
+    const badge=f.urgency?h('span',{'style':'display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:8px;background:'+(URGENCY_COLOR[f.urgency]||'#ccc')+';color:#1a1a1a'},f.urgency):null;
     return h('div',{'class':'sub-item'},
-      h('div',{'class':'sub-name'},(r.first_name||'')+' '+(r.surname||'')),
+      h('div',{'class':'sub-name'},(r.first_name||'')+' '+(r.surname||''),badge),
       h('div',{'class':'sub-meta'},(r.phone||'No phone')+' · '+f.topic)
     );
   })));
