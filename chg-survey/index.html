@@ -392,7 +392,7 @@ const QUESTIONS = [
     options:['Yes','Occasionally','No'],
     privacyNote:{showIf:A=>A.pastoral_visits==='Yes'||A.pastoral_visits==='Occasionally',
       text:'If you would like the pastoral team to contact or visit you, please select “Include my name”. The team will not be able to follow up if you keep this answer anonymous.'}},
-  {section:7, key:'pastoral_support_type', sensitive:true, type:'multichips',
+  {section:7, key:'pastoral_support_type', sensitive:false, type:'multichips',
     label:'What type of support would you appreciate?',
     options:['Home visit','Prayer support','Counselling','Practical assistance','General check-in'],
     showIf:A=>A.pastoral_visits==='Yes'||A.pastoral_visits==='Occasionally'},
@@ -451,6 +451,7 @@ const S = {
   adminTab:0, adminPwInput:'', adminPwError:'',
   data:null, loadingData:false,
   showResetModal:false, resetPinDigits:'', resetError:'', resetting:false,
+  showDeleteModal:false, deletePinDigits:'', deleteError:'', deleting:false, deleteTargetId:null, deleteTargetName:'',
   suburbFilter:'', cellgroupFilter:'', expandedRespondent:null,
   errorMsg:'', errorStep:-1,
   cgGroupCount:4, cgGroupNames:[], cgAllocations:{}, cgMethod:{}, cgSaving:false, cgSaved:false,
@@ -1105,6 +1106,7 @@ function renderAdminDash(){
   if(S.adminTab===3) wrap.appendChild(renderCellGroupAllocationTab());
 
   if(S.showResetModal) wrap.appendChild(renderResetModal());
+  if(S.showDeleteModal) wrap.appendChild(renderDeleteModal());
   return wrap;
 }
 
@@ -1248,6 +1250,13 @@ function renderCongregationTab(){
         grid.appendChild(h('div',{'class':'detail-block'},h('div',{'class':'detail-val'},'No named answers — all their responses were kept anonymous.')));
       }
       detail.appendChild(grid);
+      const delBtn=h('button',{'class':'reset-btn','style':'margin-top:10px'},'Delete This Respondent');
+      delBtn.addEventListener('click',e=>{
+        e.stopPropagation(); vib(22);
+        S.deleteTargetId=r.id; S.deleteTargetName=((r.first_name||'')+' '+(r.surname||'')).trim()||'this respondent';
+        S.showDeleteModal=true; S.deletePinDigits=''; S.deleteError=''; render();
+      });
+      detail.appendChild(delBtn);
       item.appendChild(detail);
     }
     list.appendChild(item);
@@ -1478,6 +1487,56 @@ async function doReset(){
     if(res.ok){ vib([50,30,50]); S.showResetModal=false; await loadAdminData(); }
     else { S.resetError='Reset failed'; render(); }
   }catch(e){ S.resetting=false; S.resetError='Reset failed: '+e.message; render(); }
+}
+
+function renderDeleteModal(){
+  const digits=S.deletePinDigits;
+  const overlay=h('div',{'class':'modal-overlay'});
+  const dots=h('div',{'class':'pin-dots'},...[0,1,2,3].map(i=>h('div',{'class':'pin-dot'+(i<digits.length?' filled':'')})));
+  const pad=h('div',{'class':'pin-pad'});
+  ['1','2','3','4','5','6','7','8','9','','0','del'].forEach(d=>{
+    if(d===''){ pad.appendChild(h('div',{})); return; }
+    const btn=h('button',{'class':'pin-key'},d==='del'?'⌫':d);
+    btn.addEventListener('click',()=>{
+      vib(22);
+      if(d==='del'){ S.deletePinDigits=S.deletePinDigits.slice(0,-1); render(); return; }
+      if(S.deletePinDigits.length<4){ S.deletePinDigits+=d; }
+      if(S.deletePinDigits.length===4){
+        if(S.deletePinDigits===RESET_PIN) doDeleteRespondent();
+        else { S.deleteError='Incorrect PIN'; S.deletePinDigits=''; }
+      }
+      render();
+    });
+    pad.appendChild(btn);
+  });
+  const cancelBtn=h('button',{'class':'btn-secondary',onClick:()=>{S.showDeleteModal=false;S.deleteTargetId=null;render();}},'Cancel');
+  const modal=h('div',{'class':'modal-card'},
+    h('div',{'class':'modal-title'},'Delete Respondent'),
+    h('div',{'class':'modal-sub'},'Enter the 4-digit admin PIN to permanently delete '+S.deleteTargetName+'’s respondent record and named answers. This cannot be undone.'),
+    dots, pad,
+    S.deleteError?h('div',{'class':'pin-error'},S.deleteError):null,
+    S.deleting?h('div',{'style':'color:var(--muted);font-size:13px;margin-top:8px'},'Deleting...'):null,
+    cancelBtn
+  );
+  overlay.appendChild(modal);
+  return overlay;
+}
+
+async function doDeleteRespondent(){
+  S.deleting=true; render();
+  try{
+    const res=await fetch('/.netlify/functions/delete-respondent',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pin:RESET_PIN, respondentId:S.deleteTargetId})
+    });
+    S.deleting=false;
+    if(res.ok){
+      vib([50,30,50]); S.showDeleteModal=false;
+      if(S.expandedRespondent===S.deleteTargetId) S.expandedRespondent=null;
+      S.deleteTargetId=null;
+      await loadAdminData();
+    } else { S.deleteError='Delete failed'; render(); }
+  }catch(e){ S.deleting=false; S.deleteError='Delete failed: '+e.message; render(); }
 }
 
 async function exportPptx(){
