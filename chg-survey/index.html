@@ -1247,24 +1247,7 @@ function renderInsightsTab(){
   frag.appendChild(h('div',{'style':'display:flex;gap:10px;margin-bottom:16px'},exportPptxBtn,exportXlsxBtn));
 
   const grid=h('div',{'class':'charts-grid'});
-  const sentimentKeys=['welcomed','cellgroup_connection','presabbath_feeling','serving_supported'];
-  QUESTIONS.filter(q=>['select','chips','multichips','rating','wheel'].includes(q.type)).forEach(q=>{
-    const answers=allAnswersFor(q.key);
-    if(!answers.length) return;
-    const counts=q.options.map(o=>answers.filter(a=>a.split(', ').includes(o)).length);
-    grid.appendChild(barChart(q.label,q.options,counts,sentimentKeys.includes(q.key)));
-  });
-  // knows cell group donut
-  const yes=S.data.respondents.filter(r=>r.knows_cell_group===true).length;
-  const no=S.data.respondents.filter(r=>r.knows_cell_group===false).length;
-  grid.appendChild(h('div',{'class':'chart-card'},
-    h('div',{'class':'chart-title'},'Knows Their Cell Group'),
-    h('div',{'class':'donut-legend'},
-      h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#7ecfdc'}),'Yes: '+yes),
-      h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#e8a79d'}),'No: '+no)
-    )
-  ));
-  // gender donut
+  // gender donut (shown first)
   const maleCount=S.data.respondents.filter(r=>r.gender==='Male').length;
   const femaleCount=S.data.respondents.filter(r=>r.gender==='Female').length;
   const genderUnknown=S.data.respondents.length-maleCount-femaleCount;
@@ -1276,12 +1259,29 @@ function renderInsightsTab(){
       genderUnknown?h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#888'}),'Not specified: '+genderUnknown):null
     )
   ));
-  // age demographics
+  // age demographics (shown first)
   const ages=S.data.respondents.map(r=>computeAge(r.date_of_birth)).filter(a=>a!=null);
   const ageCounts=AGE_BUCKETS.map(b=>ages.filter(b.test).length);
   if(ages.length){
     grid.appendChild(barChart('Age Demographics',AGE_BUCKETS.map(b=>b.label),ageCounts,false));
   }
+  // knows cell group donut
+  const yes=S.data.respondents.filter(r=>r.knows_cell_group===true).length;
+  const no=S.data.respondents.filter(r=>r.knows_cell_group===false).length;
+  grid.appendChild(h('div',{'class':'chart-card'},
+    h('div',{'class':'chart-title'},'Knows Their Cell Group'),
+    h('div',{'class':'donut-legend'},
+      h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#7ecfdc'}),'Yes: '+yes),
+      h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#e8a79d'}),'No: '+no)
+    )
+  ));
+  const sentimentKeys=['welcomed','cellgroup_connection','presabbath_feeling','serving_supported'];
+  QUESTIONS.filter(q=>['select','chips','multichips','rating','wheel'].includes(q.type)).forEach(q=>{
+    const answers=allAnswersFor(q.key);
+    if(!answers.length) return;
+    const counts=q.options.map(o=>answers.filter(a=>a.split(', ').includes(o)).length);
+    grid.appendChild(barChart(q.label,q.options,counts,sentimentKeys.includes(q.key)));
+  });
   frag.appendChild(grid);
 
   const textKeys=['connection_help','presabbath_improve','pastoral_note','feedback_good','feedback_improve','feedback_other','fellowship_suggestions','serving_other'];
