@@ -1211,15 +1211,33 @@ function barChart(title,options,counts,sentiment){
   );
 }
 
+function computeAge(dobStr){
+  if(!dobStr) return null;
+  const dob=new Date(dobStr+'T00:00:00');
+  if(isNaN(dob.getTime())) return null;
+  const now=new Date();
+  let age=now.getFullYear()-dob.getFullYear();
+  const m=now.getMonth()-dob.getMonth();
+  if(m<0||(m===0&&now.getDate()<dob.getDate())) age--;
+  return age;
+}
+const AGE_BUCKETS=[
+  {label:'Under 18',test:a=>a<18},
+  {label:'18–25',test:a=>a>=18&&a<=25},
+  {label:'26–35',test:a=>a>=26&&a<=35},
+  {label:'36–45',test:a=>a>=36&&a<=45},
+  {label:'46–55',test:a=>a>=46&&a<=55},
+  {label:'56–65',test:a=>a>=56&&a<=65},
+  {label:'66+',test:a=>a>=66}
+];
+
 function renderInsightsTab(){
   const frag=h('div',{});
   const totalR=S.data.respondents.length;
   const namedCount=(S.data.identifiedAnswers||[]).length;
-  const anonCount=(S.data.anonymousAnswers||[]).length;
   frag.appendChild(h('div',{'class':'stats-row'},
     h('div',{'class':'stat-card'},h('div',{'class':'stat-num'},totalR),h('div',{'class':'stat-label'},'Total Respondents')),
-    h('div',{'class':'stat-card'},h('div',{'class':'stat-num'},namedCount),h('div',{'class':'stat-label'},'Named Answers')),
-    h('div',{'class':'stat-card'},h('div',{'class':'stat-num'},anonCount),h('div',{'class':'stat-label'},'Anonymous Answers'))
+    h('div',{'class':'stat-card'},h('div',{'class':'stat-num'},namedCount),h('div',{'class':'stat-label'},'Named Answers'))
   ));
 
   const exportPptxBtn=h('button',{'class':'export-btn','style':'flex:1;margin-bottom:0'},'Export to PowerPoint');
@@ -1246,6 +1264,24 @@ function renderInsightsTab(){
       h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#e8a79d'}),'No: '+no)
     )
   ));
+  // gender donut
+  const maleCount=S.data.respondents.filter(r=>r.gender==='Male').length;
+  const femaleCount=S.data.respondents.filter(r=>r.gender==='Female').length;
+  const genderUnknown=S.data.respondents.length-maleCount-femaleCount;
+  grid.appendChild(h('div',{'class':'chart-card'},
+    h('div',{'class':'chart-title'},'Gender'),
+    h('div',{'class':'donut-legend'},
+      h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#7ecfdc'}),'Male: '+maleCount),
+      h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#e8a79d'}),'Female: '+femaleCount),
+      genderUnknown?h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#888'}),'Not specified: '+genderUnknown):null
+    )
+  ));
+  // age demographics
+  const ages=S.data.respondents.map(r=>computeAge(r.date_of_birth)).filter(a=>a!=null);
+  const ageCounts=AGE_BUCKETS.map(b=>ages.filter(b.test).length);
+  if(ages.length){
+    grid.appendChild(barChart('Age Demographics',AGE_BUCKETS.map(b=>b.label),ageCounts,false));
+  }
   frag.appendChild(grid);
 
   const textKeys=['connection_help','presabbath_improve','pastoral_note','feedback_good','feedback_improve','feedback_other','fellowship_suggestions','serving_other'];
