@@ -1071,7 +1071,12 @@ function deriveVisibleAdminData(){
   if(S.showPreLaunch) return S.rawData;
   const cutoff=new Date(LIVE_LAUNCH_CUTOFF).getTime();
   const hiddenIds=new Set(S.rawData.hiddenRespondentIds||[]);
-  const respondents=(S.rawData.respondents||[]).filter(r=>(!r.submitted_at||new Date(r.submitted_at).getTime()>=cutoff)&&!hiddenIds.has(r.id));
+  const forceVisibleIds=new Set(S.rawData.forceVisibleRespondentIds||[]);
+  const respondents=(S.rawData.respondents||[]).filter(r=>{
+    if(forceVisibleIds.has(r.id)) return true;
+    if(hiddenIds.has(r.id)) return false;
+    return !r.submitted_at||new Date(r.submitted_at).getTime()>=cutoff;
+  });
   const keepIds=new Set(respondents.map(r=>r.id));
   const identifiedAnswers=(S.rawData.identifiedAnswers||[]).filter(a=>keepIds.has(a.respondent_id));
   const anonymousAnswers=(S.rawData.anonymousAnswers||[]).filter(a=>!a.created_at||new Date(a.created_at).getTime()>=cutoff);
@@ -1108,7 +1113,8 @@ function renderAdminDash(){
   if(S.rawData){
     const cutoffMs=new Date(LIVE_LAUNCH_CUTOFF).getTime();
     const hiddenIds=new Set(S.rawData.hiddenRespondentIds||[]);
-    const hiddenCount=(S.rawData.respondents||[]).filter(r=>(r.submitted_at&&new Date(r.submitted_at).getTime()<cutoffMs)||hiddenIds.has(r.id)).length;
+    const forceVisibleIdsHdr=new Set(S.rawData.forceVisibleRespondentIds||[]);
+    const hiddenCount=(S.rawData.respondents||[]).filter(r=>!forceVisibleIdsHdr.has(r.id)&&((r.submitted_at&&new Date(r.submitted_at).getTime()<cutoffMs)||hiddenIds.has(r.id))).length;
     const toggleLabel=h('label',{'class':'prelaunch-toggle','style':'display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:10px'});
     const cb=h('input',{type:'checkbox'});
     cb.checked=S.showPreLaunch;
@@ -1229,6 +1235,8 @@ function renderInsightsTab(){
 function renderCongregationTab(){
   const frag=h('div',{});
   const hiddenIdSet=new Set((S.rawData&&S.rawData.hiddenRespondentIds)||[]);
+  const forceVisibleIdSet=new Set((S.rawData&&S.rawData.forceVisibleRespondentIds)||[]);
+  const cutoffMs=new Date(LIVE_LAUNCH_CUTOFF).getTime();
   const suburbs=[...new Set(S.data.respondents.map(r=>r.suburb).filter(Boolean))].sort();
   const suburbSel=h('select',{'class':'filter-select'},h('option',{value:''},'All Suburbs'),...suburbs.map(s=>h('option',{value:s},s)));
   suburbSel.value=S.suburbFilter;
@@ -1285,15 +1293,22 @@ function renderCongregationTab(){
         grid.appendChild(h('div',{'class':'detail-block'},h('div',{'class':'detail-val'},'No named answers — all their responses were kept anonymous.')));
       }
       detail.appendChild(grid);
+      const isForceVisible=forceVisibleIdSet.has(r.id);
       const isHidden=hiddenIdSet.has(r.id);
+      const isPreLaunch=r.submitted_at&&new Date(r.submitted_at).getTime()<cutoffMs;
+      let hideBtnLabel, hideBtnAction;
+      if(isForceVisible){ hideBtnLabel='Remove "Show Anyway" Override'; hideBtnAction=null; }
+      else if(isHidden){ hideBtnLabel='Unhide This Respondent'; hideBtnAction=null; }
+      else if(isPreLaunch){ hideBtnLabel='Mark as Live Data (Show Anyway)'; hideBtnAction=true; }
+      else { hideBtnLabel='Hide This Respondent'; hideBtnAction=false; }
       const actionsRow=h('div',{'style':'display:flex;gap:8px;margin-top:10px;flex-wrap:wrap'});
-      const hideBtn=h('button',{'class':'btn-secondary'},isHidden?'Unhide This Respondent':'Hide This Respondent');
+      const hideBtn=h('button',{'class':'btn-secondary'},hideBtnLabel);
       hideBtn.addEventListener('click',async e=>{
         e.stopPropagation(); vib(22);
         try{
           await fetch('/.netlify/functions/hide-respondent',{
             method:'POST', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({respondentId:r.id, hidden:!isHidden})
+            body:JSON.stringify({respondentId:r.id, visible:hideBtnAction})
           });
         }catch(err){}
         await loadAdminData();
