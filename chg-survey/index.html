@@ -1070,7 +1070,8 @@ function deriveVisibleAdminData(){
   if(!S.rawData) return null;
   if(S.showPreLaunch) return S.rawData;
   const cutoff=new Date(LIVE_LAUNCH_CUTOFF).getTime();
-  const respondents=(S.rawData.respondents||[]).filter(r=>!r.submitted_at||new Date(r.submitted_at).getTime()>=cutoff);
+  const hiddenIds=new Set(S.rawData.hiddenRespondentIds||[]);
+  const respondents=(S.rawData.respondents||[]).filter(r=>(!r.submitted_at||new Date(r.submitted_at).getTime()>=cutoff)&&!hiddenIds.has(r.id));
   const keepIds=new Set(respondents.map(r=>r.id));
   const identifiedAnswers=(S.rawData.identifiedAnswers||[]).filter(a=>keepIds.has(a.respondent_id));
   const anonymousAnswers=(S.rawData.anonymousAnswers||[]).filter(a=>!a.created_at||new Date(a.created_at).getTime()>=cutoff);
@@ -1106,7 +1107,8 @@ function renderAdminDash(){
   ));
   if(S.rawData){
     const cutoffMs=new Date(LIVE_LAUNCH_CUTOFF).getTime();
-    const hiddenCount=(S.rawData.respondents||[]).filter(r=>r.submitted_at&&new Date(r.submitted_at).getTime()<cutoffMs).length;
+    const hiddenIds=new Set(S.rawData.hiddenRespondentIds||[]);
+    const hiddenCount=(S.rawData.respondents||[]).filter(r=>(r.submitted_at&&new Date(r.submitted_at).getTime()<cutoffMs)||hiddenIds.has(r.id)).length;
     const toggleLabel=h('label',{'class':'prelaunch-toggle','style':'display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:10px'});
     const cb=h('input',{type:'checkbox'});
     cb.checked=S.showPreLaunch;
@@ -1114,8 +1116,8 @@ function renderAdminDash(){
     toggleLabel.appendChild(cb);
     toggleLabel.appendChild(document.createTextNode(
       S.showPreLaunch
-        ? 'Showing all entries, including pre-launch test data (before 30 Aug)'
-        : 'Hiding '+hiddenCount+' entr'+(hiddenCount===1?'y':'ies')+' submitted before the 30 Aug launch'
+        ? 'Showing all entries, including pre-launch test data and manually hidden entries'
+        : 'Hiding '+hiddenCount+' entr'+(hiddenCount===1?'y':'ies')+' (before the 30 Aug launch, or manually hidden)'
     ));
     wrap.appendChild(toggleLabel);
   }
@@ -1226,6 +1228,7 @@ function renderInsightsTab(){
 
 function renderCongregationTab(){
   const frag=h('div',{});
+  const hiddenIdSet=new Set((S.rawData&&S.rawData.hiddenRespondentIds)||[]);
   const suburbs=[...new Set(S.data.respondents.map(r=>r.suburb).filter(Boolean))].sort();
   const suburbSel=h('select',{'class':'filter-select'},h('option',{value:''},'All Suburbs'),...suburbs.map(s=>h('option',{value:s},s)));
   suburbSel.value=S.suburbFilter;
@@ -1282,13 +1285,28 @@ function renderCongregationTab(){
         grid.appendChild(h('div',{'class':'detail-block'},h('div',{'class':'detail-val'},'No named answers — all their responses were kept anonymous.')));
       }
       detail.appendChild(grid);
-      const delBtn=h('button',{'class':'reset-btn','style':'margin-top:10px'},'Delete This Respondent');
+      const isHidden=hiddenIdSet.has(r.id);
+      const actionsRow=h('div',{'style':'display:flex;gap:8px;margin-top:10px;flex-wrap:wrap'});
+      const hideBtn=h('button',{'class':'btn-secondary'},isHidden?'Unhide This Respondent':'Hide This Respondent');
+      hideBtn.addEventListener('click',async e=>{
+        e.stopPropagation(); vib(22);
+        try{
+          await fetch('/.netlify/functions/hide-respondent',{
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({respondentId:r.id, hidden:!isHidden})
+          });
+        }catch(err){}
+        await loadAdminData();
+      });
+      actionsRow.appendChild(hideBtn);
+      const delBtn=h('button',{'class':'reset-btn'},'Delete This Respondent');
       delBtn.addEventListener('click',e=>{
         e.stopPropagation(); vib(22);
         S.deleteTargetId=r.id; S.deleteTargetName=((r.first_name||'')+' '+(r.surname||'')).trim()||'this respondent';
         S.showDeleteModal=true; S.deletePinDigits=''; S.deleteError=''; render();
       });
-      detail.appendChild(delBtn);
+      actionsRow.appendChild(delBtn);
+      detail.appendChild(actionsRow);
       item.appendChild(detail);
     }
     list.appendChild(item);
