@@ -449,7 +449,7 @@ const S = {
   submitting:false, submitError:'',
   adminAuthed: sessionStorage.getItem('adminAuthed')==='true',
   adminTab:0, adminPwInput:'', adminPwError:'',
-  data:null, loadingData:false,
+  data:null, rawData:null, loadingData:false, showPreLaunch:false,
   showResetModal:false, resetPinDigits:'', resetError:'', resetting:false,
   showDeleteModal:false, deletePinDigits:'', deleteError:'', deleting:false, deleteTargetId:null, deleteTargetName:'',
   suburbFilter:'', cellgroupFilter:'', expandedRespondent:null,
@@ -1064,12 +1064,28 @@ function renderAdminLogin(){
   return h('div',{'class':'screen'},h('div',{'class':'card'},...kids));
 }
 
+const LIVE_LAUNCH_CUTOFF='2026-08-30T00:00:00+02:00'; // survey link went out Sat 30 Aug 2026; earlier entries are pre-launch test data
+
+function deriveVisibleAdminData(){
+  if(!S.rawData) return null;
+  if(S.showPreLaunch) return S.rawData;
+  const cutoff=new Date(LIVE_LAUNCH_CUTOFF).getTime();
+  const respondents=(S.rawData.respondents||[]).filter(r=>!r.submitted_at||new Date(r.submitted_at).getTime()>=cutoff);
+  const keepIds=new Set(respondents.map(r=>r.id));
+  const identifiedAnswers=(S.rawData.identifiedAnswers||[]).filter(a=>keepIds.has(a.respondent_id));
+  const anonymousAnswers=(S.rawData.anonymousAnswers||[]).filter(a=>!a.created_at||new Date(a.created_at).getTime()>=cutoff);
+  const followUpRequests=(S.rawData.followUpRequests||[]).filter(f=>keepIds.has(f.respondent_id));
+  const cellGroupAllocations=(S.rawData.cellGroupAllocations||[]).filter(a=>keepIds.has(a.respondent_id));
+  return {...S.rawData, respondents, identifiedAnswers, anonymousAnswers, followUpRequests, cellGroupAllocations};
+}
+
 async function loadAdminData(){
   S.loadingData=true; render();
   try{
     const res=await fetch('/.netlify/functions/getresponses');
-    S.data=await res.json();
-  }catch(e){ S.data={respondents:[],identifiedAnswers:[],anonymousAnswers:[],followUpRequests:[]}; }
+    S.rawData=await res.json();
+  }catch(e){ S.rawData={respondents:[],identifiedAnswers:[],anonymousAnswers:[],followUpRequests:[]}; }
+  S.data=deriveVisibleAdminData();
   if(S.data.cellGroupSettings && S.data.cellGroupSettings.length){
     S.cgGroupNames=S.data.cellGroupSettings.slice();
     S.cgGroupCount=S.cgGroupNames.length;
@@ -1088,6 +1104,22 @@ function renderAdminDash(){
     h('div',{},h('div',{'class':'admin-title'},'Othandweni Branch Survey — Admin'),h('div',{'class':'admin-sub'},'Response insights and congregation overview')),
     h('button',{'class':'logout-btn',onClick:()=>{sessionStorage.removeItem('adminAuthed');S.adminAuthed=false;S.mode='survey';S.stepIdx=0;render();}},'Log Out')
   ));
+  if(S.rawData){
+    const cutoffMs=new Date(LIVE_LAUNCH_CUTOFF).getTime();
+    const hiddenCount=(S.rawData.respondents||[]).filter(r=>r.submitted_at&&new Date(r.submitted_at).getTime()<cutoffMs).length;
+    const toggleLabel=h('label',{'class':'prelaunch-toggle','style':'display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:10px'});
+    const cb=h('input',{type:'checkbox'});
+    cb.checked=S.showPreLaunch;
+    cb.addEventListener('change',e=>{ S.showPreLaunch=e.target.checked; S.data=deriveVisibleAdminData(); render(); });
+    toggleLabel.appendChild(cb);
+    toggleLabel.appendChild(document.createTextNode(
+      S.showPreLaunch
+        ? 'Showing all entries, including pre-launch test data (before 30 Aug)'
+        : 'Hiding '+hiddenCount+' entr'+(hiddenCount===1?'y':'ies')+' submitted before the 30 Aug launch'
+    ));
+    wrap.appendChild(toggleLabel);
+  }
+
   const tabs=['Survey Insights','Congregation and Cell Groups','Follow-up Requests','Cell Group Allocation'];
   wrap.appendChild(h('div',{'class':'tab-row'},...tabs.map((t,i)=>{
     const btn=h('button',{'class':'tab-btn'+(S.adminTab===i?' active':'')},t);
