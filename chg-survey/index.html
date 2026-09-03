@@ -1422,16 +1422,44 @@ function kmeansCluster(points, k, iterations){
   return assignments;
 }
 
+/* Johannesburg CBD reference point, used to classify by real-world direction
+   rather than arbitrary cluster order when the four official groups are in use:
+   North = northern Joburg suburbs (Sandton/Fourways), Pretoria = further north
+   (Midrand into Pretoria), East = east of Joburg, South = Joburg city, south,
+   and anything not clearly North/Pretoria/East (including the CBD itself). */
+const JHB_LAT=-26.2041, JHB_LNG=28.0473;
+function classifyGautengDirection(lat,lng){
+  const dLat=lat-JHB_LAT, dLng=lng-JHB_LNG;
+  if(dLng>0.10 && dLat<0.20) return 'East';
+  if(dLat>0.20) return 'Pretoria';
+  if(dLat>0.08) return 'North';
+  return 'South';
+}
+function matchDirectionalGroups(names){
+  const find=kw=>names.find(n=>n.toLowerCase().includes(kw));
+  const North=find('north'), Pretoria=find('pretoria'), South=find('south'), East=find('east');
+  return (North&&Pretoria&&South&&East) ? {North,Pretoria,South,East} : null;
+}
+
 function runAiAllocation(){
-  const n=S.cgGroupNames.length;
   const withCoords = S.data.respondents.filter(r=>r.latitude!=null && r.longitude!=null);
-  const points = withCoords.map(r=>({id:r.id, lat:parseFloat(r.latitude), lng:parseFloat(r.longitude)}));
-  const assignments = kmeansCluster(points, Math.min(n, Math.max(1,points.length)));
-  points.forEach(p=>{
-    const clusterIdx = assignments[p.id];
-    S.cgAllocations[p.id]=S.cgGroupNames[clusterIdx];
-    S.cgMethod=S.cgMethod||{}; S.cgMethod[p.id]='location';
-  });
+  const dirMap=matchDirectionalGroups(S.cgGroupNames);
+  if(dirMap){
+    withCoords.forEach(r=>{
+      const dir=classifyGautengDirection(parseFloat(r.latitude), parseFloat(r.longitude));
+      S.cgAllocations[r.id]=dirMap[dir];
+      S.cgMethod[r.id]='location';
+    });
+  } else {
+    const n=S.cgGroupNames.length;
+    const points = withCoords.map(r=>({id:r.id, lat:parseFloat(r.latitude), lng:parseFloat(r.longitude)}));
+    const assignments = kmeansCluster(points, Math.min(n, Math.max(1,points.length)));
+    points.forEach(p=>{
+      const clusterIdx = assignments[p.id];
+      S.cgAllocations[p.id]=S.cgGroupNames[clusterIdx];
+      S.cgMethod[p.id]='location';
+    });
+  }
   vib([50,30,50]);
   render();
 }
@@ -1494,8 +1522,11 @@ function renderCellGroupAllocationTab(){
 
   const withCoords=S.data.respondents.filter(r=>r.latitude!=null&&r.longitude!=null).length;
   const withoutCoords=S.data.respondents.length-withCoords;
+  const usesDirectionalGroups=!!matchDirectionalGroups(S.cgGroupNames);
   frag.appendChild(h('p',{'style':'font-size:12px;color:var(--muted);margin:10px 0;line-height:1.6'},
-    'This groups people by how close their mapped addresses are to each other — it is a fixed geographic distance calculation, not AI, and gives the same result every time you run it on the same data. '+
+    (usesDirectionalGroups
+      ? 'With the four official groups in use, this places people by real direction from Johannesburg — North covers northern Joburg suburbs, Pretoria covers Midrand and further north, East covers the East Rand, and South covers Johannesburg city and everything else. It is a fixed calculation, not AI, and gives the same result every time.'
+      : 'This groups people by how close their mapped addresses are to each other — it is a fixed geographic distance calculation, not AI, and gives the same result every time you run it on the same data.')+' '+
     withCoords+' respondent(s) have a mapped address and can be grouped this way.'+
     (withoutCoords?(' '+withoutCoords+' entered their address manually and will need manual allocation below.'):'')));
 
