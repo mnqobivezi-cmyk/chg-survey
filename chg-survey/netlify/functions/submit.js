@@ -12,12 +12,15 @@ exports.handler = async function(event) {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON' }) };
   }
 
-  const { respondent, identifiedAnswers, anonymousAnswers, followUp } = payload;
+  const { respondent, identifiedAnswers, anonymousAnswers, followUp, selfSelectedCellGroup } = payload;
   const sql = neon(process.env.NEON_DATABASE_URL);
 
   try {
     if (followUp && followUp.topic) {
       await sql`ALTER TABLE follow_up_requests ADD COLUMN IF NOT EXISTS urgency text`;
+    }
+    if (selfSelectedCellGroup) {
+      await sql`ALTER TABLE cell_group_allocations ADD COLUMN IF NOT EXISTS approved boolean NOT NULL DEFAULT true`;
     }
     const [row] = await sql`
       INSERT INTO respondents (
@@ -60,6 +63,14 @@ exports.handler = async function(event) {
       queries.push(sql`
         INSERT INTO follow_up_requests (respondent_id, topic, urgency)
         VALUES (${respondentId}, ${followUp.topic}, ${followUp.urgency || null})
+      `);
+    }
+
+    if (selfSelectedCellGroup) {
+      queries.push(sql`
+        INSERT INTO cell_group_allocations (respondent_id, group_name, method, approved, updated_at)
+        VALUES (${respondentId}, ${selfSelectedCellGroup}, 'self-selected', false, now())
+        ON CONFLICT (respondent_id) DO NOTHING
       `);
     }
 

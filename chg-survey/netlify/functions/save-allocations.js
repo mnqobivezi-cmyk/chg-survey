@@ -20,6 +20,7 @@ exports.handler = async function(event) {
   const sql = neon(process.env.NEON_DATABASE_URL);
 
   try {
+    await sql`ALTER TABLE cell_group_allocations ADD COLUMN IF NOT EXISTS approved boolean NOT NULL DEFAULT true`;
     if (Array.isArray(groupNames)) {
       await sql`
         INSERT INTO cell_group_settings (id, group_names, updated_at)
@@ -31,9 +32,9 @@ exports.handler = async function(event) {
     if (Array.isArray(allocations)) {
       for (const a of allocations) {
         await sql`
-          INSERT INTO cell_group_allocations (respondent_id, group_name, method, updated_at)
-          VALUES (${a.respondent_id}, ${a.group_name}, ${a.method || 'manual'}, now())
-          ON CONFLICT (respondent_id) DO UPDATE SET group_name = EXCLUDED.group_name, method = EXCLUDED.method, updated_at = now()
+          INSERT INTO cell_group_allocations (respondent_id, group_name, method, approved, updated_at)
+          VALUES (${a.respondent_id}, ${a.group_name}, ${a.method || 'manual'}, true, now())
+          ON CONFLICT (respondent_id) DO UPDATE SET group_name = EXCLUDED.group_name, method = EXCLUDED.method, approved = true, updated_at = now()
         `;
       }
     }

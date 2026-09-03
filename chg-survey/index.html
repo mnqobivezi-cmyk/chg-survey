@@ -458,7 +458,7 @@ const S = {
   showDeleteModal:false, deletePinDigits:'', deleteError:'', deleting:false, deleteTargetId:null, deleteTargetName:'',
   suburbFilter:'', cellgroupFilter:'', expandedRespondent:null,
   errorMsg:'', errorStep:-1,
-  cgGroupCount:4, cgGroupNames:[], cgAllocations:{}, cgMethod:{}, cgSaving:false, cgSaved:false,
+  cgGroupCount:4, cgGroupNames:[], cgAllocations:{}, cgMethod:{}, cgApproved:{}, cgSaving:false, cgSaved:false,
   lkFirst:'', lkSurname:'', lkPhone:'', lkResult:null, lkLoading:false, lkError:'',
   lkDisputeOpen:false, lkDisputeMsg:'', lkDisputeSent:false
 };
@@ -710,12 +710,19 @@ function renderAddress(){
 }
 
 /* ---- Section 2b: cell group ---- */
+const DEFAULT_CELL_GROUPS=['North Cell Group','Pretoria Cell Group','South Cell Group','East Cell Group'];
+const CELL_GROUP_OTHER='My Cell Group isn’t listed';
+
 function renderCellGroup(){
   const sec=SECTION_META[1];
   const opts=h('div',{'class':'options'},...['Yes','No'].map(o=>{
     const sel=A.knows_cell_group===(o==='Yes');
     const btn=h('button',{'class':'opt'+(sel?' selected':'')},h('span',{'class':'opt-ring'},sel?svgCheck():''),o);
-    btn.addEventListener('click',()=>{vib(22);A.knows_cell_group=(o==='Yes');if(o!=='Yes')A.stated_cell_group='';reselect(()=>{});});
+    btn.addEventListener('click',()=>{
+      vib(22);A.knows_cell_group=(o==='Yes');
+      if(o!=='Yes'){ A.stated_cell_group=''; A.cellGroupChoice=null; }
+      reselect(()=>{});
+    });
     return btn;
   }));
   const kids=[
@@ -724,9 +731,25 @@ function renderCellGroup(){
     opts
   ];
   if(A.knows_cell_group===true){
-    const nameInp=h('input',{type:'text',placeholder:'e.g. North Cell Group',value:A.stated_cell_group||''});
-    nameInp.addEventListener('input',e=>{A.stated_cell_group=e.target.value;clearErr();});
-    kids.push(h('h2',{'style':'font-size:14px;margin-top:4px'},'What is your Cell Group called?'), nameInp);
+    const choices=[...DEFAULT_CELL_GROUPS,CELL_GROUP_OTHER];
+    const groupOpts=h('div',{'class':'options','style':'margin-top:4px'},...choices.map(o=>{
+      const isOther=o===CELL_GROUP_OTHER;
+      const sel=isOther?A.cellGroupChoice==='other':A.cellGroupChoice===o;
+      const btn=h('button',{'class':'opt'+(sel?' selected':'')},h('span',{'class':'opt-ring'},sel?svgCheck():''),o);
+      btn.addEventListener('click',()=>{
+        vib(22);
+        if(isOther){ A.cellGroupChoice='other'; A.stated_cell_group=DEFAULT_CELL_GROUPS.includes(A.stated_cell_group)?'':A.stated_cell_group; }
+        else { A.cellGroupChoice=o; A.stated_cell_group=o; }
+        reselect(()=>{});
+      });
+      return btn;
+    }));
+    kids.push(h('h2',{'style':'font-size:14px;margin-top:4px'},'What is your Cell Group called?'), groupOpts);
+    if(A.cellGroupChoice==='other'){
+      const nameInp=h('input',{type:'text',placeholder:'Type your Cell Group name',value:A.stated_cell_group||''});
+      nameInp.addEventListener('input',e=>{A.stated_cell_group=e.target.value;clearErr();});
+      kids.push(nameInp);
+    }
   }
   const nextBtn=h('button',{'class':'btn-primary'},'Next');
   nextBtn.addEventListener('click',()=>{
@@ -951,7 +974,8 @@ function buildPayload(){
   if(A.pastoral_contact==='Yes, please contact me'){
     followUp={topic:'Pastoral care follow-up', urgency:A.pastoral_urgency||null};
   }
-  return {respondent, identifiedAnswers, anonymousAnswers, followUp};
+  const selfSelectedCellGroup=(A.knows_cell_group===true&&DEFAULT_CELL_GROUPS.includes(A.stated_cell_group))?A.stated_cell_group:null;
+  return {respondent, identifiedAnswers, anonymousAnswers, followUp, selfSelectedCellGroup};
 }
 
 async function submitForm(){
@@ -1100,10 +1124,14 @@ async function loadAdminData(){
     S.cgGroupNames=S.data.cellGroupSettings.slice();
     S.cgGroupCount=S.cgGroupNames.length;
   } else if(!S.cgGroupNames.length){
-    S.cgGroupNames=Array.from({length:S.cgGroupCount},(_,i)=>'Cell Group '+String.fromCharCode(65+i));
+    S.cgGroupNames=Array.from({length:S.cgGroupCount},(_,i)=>DEFAULT_CELL_GROUPS[i]||('Cell Group '+String.fromCharCode(65+i)));
   }
-  S.cgAllocations={};
-  (S.data.cellGroupAllocations||[]).forEach(a=>{ S.cgAllocations[a.respondent_id]=a.group_name; });
+  S.cgAllocations={}; S.cgMethod={}; S.cgApproved={};
+  (S.data.cellGroupAllocations||[]).forEach(a=>{
+    S.cgAllocations[a.respondent_id]=a.group_name;
+    S.cgMethod[a.respondent_id]=a.method;
+    S.cgApproved[a.respondent_id]=a.approved!==false;
+  });
   S.loadingData=false; render();
 }
 
@@ -1451,7 +1479,7 @@ function renderCellGroupAllocationTab(){
     const n=parseInt(e.target.value,10);
     const old=S.cgGroupNames;
     S.cgGroupCount=n;
-    S.cgGroupNames=Array.from({length:n},(_,i)=>old[i]||('Cell Group '+String.fromCharCode(65+i)));
+    S.cgGroupNames=Array.from({length:n},(_,i)=>old[i]||DEFAULT_CELL_GROUPS[i]||('Cell Group '+String.fromCharCode(65+i)));
     render();
   });
   frag.appendChild(h('div',{'class':'filter-row'},h('div',{'style':'font-size:13px;color:var(--muted);align-self:center'},'Number of Cell Groups:'),countSel));
@@ -1483,7 +1511,7 @@ function renderCellGroupAllocationTab(){
   )));
 
   const table=h('table',{},
-    h('thead',{},h('tr',{},h('th',{},'Name'),h('th',{},'Suburb'),h('th',{},'Assigned Group'))),
+    h('thead',{},h('tr',{},h('th',{},'Name'),h('th',{},'Suburb'),h('th',{},'Assigned Group'),h('th',{},''))),
     h('tbody',{},...S.data.respondents.map(r=>{
       const sel=h('select',{'class':'filter-select','style':'font-size:12px;padding:6px 8px'});
       sel.appendChild(h('option',{value:''},'Unassigned'));
@@ -1492,14 +1520,18 @@ function renderCellGroupAllocationTab(){
         if(S.cgAllocations[r.id]===name) opt.selected=true;
         sel.appendChild(opt);
       });
+      const needsApproval=S.cgMethod[r.id]==='self-selected'&&S.cgApproved[r.id]===false;
+      const badge=needsApproval?h('span',{'style':'display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;background:#e8cc9d;color:#1a1a1a;white-space:nowrap'},'Respondent selected — needs approval'):null;
       sel.addEventListener('change',e=>{
         S.cgAllocations[r.id]=e.target.value||null;
-        S.cgMethod=S.cgMethod||{}; S.cgMethod[r.id]='manual';
+        S.cgMethod[r.id]='manual';
+        render();
       });
       return h('tr',{},
         h('td',{},(r.first_name||'')+' '+(r.surname||'')),
         h('td',{},r.suburb||'-'),
-        h('td',{},sel)
+        h('td',{},sel),
+        h('td',{},badge)
       );
     }))
   );
