@@ -126,9 +126,9 @@ textarea::placeholder,input::placeholder{color:var(--muted)}
 .admin-sub{font-size:12px;color:var(--muted);margin-top:2px}
 .logout-btn{padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);font-size:13px;cursor:pointer}
 .tab-row{display:flex;gap:8px;margin-bottom:20px;border-bottom:1px solid rgba(255,255,255,.07);padding-bottom:0}
-.tab-btn{padding:10px 16px;border:none;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent}
+.tab-btn{flex:1;padding:10px 12px;border:none;background:transparent;color:var(--muted);font-size:14px;font-weight:700;line-height:1.3;cursor:pointer;border-bottom:2px solid transparent;text-align:center}
 .tab-btn.active{color:var(--acc);border-bottom-color:var(--acc)}
-.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.stats-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px}
 .stat-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:14px;text-align:center}
 .stat-num{font-size:26px;font-weight:700;color:var(--acc)}
 .stat-label{font-size:12px;color:var(--muted);margin-top:3px}
@@ -1303,18 +1303,12 @@ function renderInsightsTab(){
     h('div',{'class':'stat-card'},h('div',{'class':'stat-num'},namedCount),h('div',{'class':'stat-label'},'Named Answers'))
   ));
 
-  const exportPptxBtn=h('button',{'class':'export-btn','style':'flex:1;margin-bottom:0'},'Export to PowerPoint');
-  exportPptxBtn.addEventListener('click',exportPptx);
-  const exportXlsxBtn=h('button',{'class':'export-btn','style':'flex:1;margin-bottom:0'},'Export to Excel');
-  exportXlsxBtn.addEventListener('click',exportExcel);
-  frag.appendChild(h('div',{'style':'display:flex;gap:10px;margin-bottom:16px'},exportPptxBtn,exportXlsxBtn));
-
-  const grid=h('div',{'class':'charts-grid'});
+  const demoGrid=h('div',{'class':'charts-grid'});
   // gender donut (shown first)
   const maleCount=S.data.respondents.filter(r=>r.gender==='Male').length;
   const femaleCount=S.data.respondents.filter(r=>r.gender==='Female').length;
   const genderUnknown=S.data.respondents.length-maleCount-femaleCount;
-  grid.appendChild(donutChart('Gender',[
+  demoGrid.appendChild(donutChart('Gender',[
     {label:'Male',count:maleCount,color:'#4f8ef7'},
     {label:'Female',count:femaleCount,color:'#ff8b73'},
     {label:'Not specified',count:genderUnknown,color:'#c7cedb'}
@@ -1323,15 +1317,24 @@ function renderInsightsTab(){
   const ages=S.data.respondents.map(r=>computeAge(r.date_of_birth)).filter(a=>a!=null);
   const ageCounts=AGE_BUCKETS.map(b=>ages.filter(b.test).length);
   if(ages.length){
-    grid.appendChild(barChart('Age Demographics',AGE_BUCKETS.map(b=>b.label),ageCounts,false));
+    demoGrid.appendChild(barChart('Age Demographics',AGE_BUCKETS.map(b=>b.label),ageCounts,false));
   }
   // knows cell group donut
   const yes=S.data.respondents.filter(r=>r.knows_cell_group===true).length;
   const no=S.data.respondents.filter(r=>r.knows_cell_group===false).length;
-  grid.appendChild(donutChart('Knows Their Cell Group',[
+  demoGrid.appendChild(donutChart('Knows Their Cell Group',[
     {label:'Yes',count:yes,color:'#2ec4a6'},
     {label:'No',count:no,color:'#ff8b73'}
   ]));
+  frag.appendChild(demoGrid);
+
+  const exportPptxBtn=h('button',{'class':'export-btn','style':'flex:1;margin-bottom:0'},'Export to PowerPoint');
+  exportPptxBtn.addEventListener('click',exportPptx);
+  const exportXlsxBtn=h('button',{'class':'export-btn','style':'flex:1;margin-bottom:0'},'Export to Excel');
+  exportXlsxBtn.addEventListener('click',exportExcel);
+  frag.appendChild(h('div',{'style':'display:flex;gap:10px;margin-bottom:16px'},exportPptxBtn,exportXlsxBtn));
+
+  const grid=h('div',{'class':'charts-grid'});
   const sentimentKeys=['welcomed','cellgroup_connection','presabbath_feeling','serving_supported'];
   QUESTIONS.filter(q=>['select','chips','multichips','rating','wheel'].includes(q.type)).forEach(q=>{
     const answers=allAnswersFor(q.key);
@@ -1769,29 +1772,85 @@ async function doDeleteRespondent(){
   }catch(e){ S.deleting=false; S.deleteError='Delete failed: '+e.message; render(); }
 }
 
+function warmCoolHex(t){
+  const cool=[46,196,166], warm=[255,139,115];
+  const c=cool.map((v,i)=>Math.round(v+(warm[i]-v)*t));
+  return c.map(v=>v.toString(16).padStart(2,'0')).join('').toUpperCase();
+}
+
 async function exportPptx(){
   if(!window._pptxReady || !window.PptxGenJS){ alert('Export library still loading, please try again in a moment.'); return; }
   const pptx=new window.PptxGenJS();
+  const BG='F5F7FB', INK='1E2530', MUTED='8A94A6';
+  const BLUE='4F8EF7', BLUE_TINT='EEF4FF';
+  const CORAL='FF8B73', CORAL_TINT='FFF1EC';
+  const MINT='2EC4A6', MINT_TINT='EAFAF3';
+  const AMBER='F5B942', AMBER_TINT='FFF8E6';
+  const LAVENDER='8B7FF0', LAVENDER_TINT='F3F0FF';
+  const GRAY='C7CEDB';
+  const PALETTE=[BLUE,CORAL,MINT,AMBER,LAVENDER];
+  const SLIDE_H=5.63;
+
   const title=pptx.addSlide();
-  title.addText('Othandweni Branch Survey',{x:0.5,y:1.8,w:9,h:1,fontSize:32,bold:true,color:'0d1426'});
-  title.addText('Response Insights',{x:0.5,y:2.6,w:9,h:0.6,fontSize:16,color:'007a8a'});
+  title.background={color:BG};
+  title.addShape(pptx.ShapeType.rect,{x:0.5,y:2.55,w:1.1,h:0.06,fill:{color:BLUE},line:{type:'none'}});
+  title.addText('Othandweni Branch Survey',{x:0.5,y:1.7,w:9,h:1,fontSize:32,bold:true,color:INK});
+  title.addText('Response Insights',{x:0.5,y:2.7,w:9,h:0.6,fontSize:16,color:BLUE});
 
+  const totalR=S.data.respondents.length;
+  const namedCount=(S.data.identifiedAnswers||[]).length;
   const summary=pptx.addSlide();
-  summary.addText('Summary',{x:0.5,y:0.3,w:9,h:0.5,fontSize:22,bold:true});
-  summary.addText(
-    'Total Respondents: '+S.data.respondents.length+'\n'+
-    'Named Answers: '+(S.data.identifiedAnswers||[]).length+'\n'+
-    'Anonymous Answers: '+(S.data.anonymousAnswers||[]).length,
-    {x:0.5,y:1,w:9,h:1.5,fontSize:14}
-  );
+  summary.background={color:BG};
+  summary.addText('Summary',{x:0.5,y:0.3,w:9,h:0.5,fontSize:22,bold:true,color:INK});
+  summary.addShape(pptx.ShapeType.roundRect,{x:0.5,y:1,w:2.6,h:1.3,fill:{color:BLUE_TINT},line:{type:'none'},rectRadius:0.08});
+  summary.addText(String(totalR),{x:0.5,y:1.1,w:2.6,h:0.65,fontSize:28,bold:true,color:BLUE,align:'center'});
+  summary.addText('Total Respondents',{x:0.5,y:1.75,w:2.6,h:0.4,fontSize:11,color:MUTED,align:'center'});
+  summary.addShape(pptx.ShapeType.roundRect,{x:3.3,y:1,w:2.6,h:1.3,fill:{color:MINT_TINT},line:{type:'none'},rectRadius:0.08});
+  summary.addText(String(namedCount),{x:3.3,y:1.1,w:2.6,h:0.65,fontSize:28,bold:true,color:MINT,align:'center'});
+  summary.addText('Named Answers',{x:3.3,y:1.75,w:2.6,h:0.4,fontSize:11,color:MUTED,align:'center'});
 
+  const maleCount=S.data.respondents.filter(r=>r.gender==='Male').length;
+  const femaleCount=S.data.respondents.filter(r=>r.gender==='Female').length;
+  const genderUnknown=totalR-maleCount-femaleCount;
+  summary.addText('Gender',{x:0.5,y:2.55,w:2.8,h:0.35,fontSize:12,bold:true,color:INK});
+  summary.addChart(pptx.ChartType.doughnut,[{name:'Gender',labels:['Male','Female','Not specified'],values:[maleCount,femaleCount,genderUnknown]}],
+    {x:0.3,y:2.85,w:3,h:2.6,chartColors:[BLUE,CORAL,GRAY],showLegend:true,legendPos:'b',legendColor:MUTED});
+
+  const yes=S.data.respondents.filter(r=>r.knows_cell_group===true).length;
+  const no=S.data.respondents.filter(r=>r.knows_cell_group===false).length;
+  summary.addText('Knows Their Cell Group',{x:3.6,y:2.55,w:3.2,h:0.35,fontSize:12,bold:true,color:INK});
+  summary.addChart(pptx.ChartType.doughnut,[{name:'Cell Group',labels:['Yes','No'],values:[yes,no]}],
+    {x:3.4,y:2.85,w:3,h:2.6,chartColors:[MINT,CORAL],showLegend:true,legendPos:'b',legendColor:MUTED});
+
+  const ages=S.data.respondents.map(r=>computeAge(r.date_of_birth)).filter(a=>a!=null);
+  if(ages.length){
+    const ageCounts=AGE_BUCKETS.map(b=>ages.filter(b.test).length);
+    const ageSlide=pptx.addSlide();
+    ageSlide.background={color:BG};
+    ageSlide.addShape(pptx.ShapeType.rect,{x:0,y:0,w:0.12,h:SLIDE_H,fill:{color:LAVENDER},line:{type:'none'}});
+    ageSlide.addText('Age Demographics',{x:0.5,y:0.3,w:9,h:0.6,fontSize:18,bold:true,color:INK});
+    ageSlide.addChart(pptx.ChartType.bar,[{name:'Age',labels:AGE_BUCKETS.map(b=>b.label),values:ageCounts}],
+      {x:0.5,y:1,w:9,h:4.3,barDir:'bar',chartColors:[LAVENDER],catAxisLabelColor:MUTED,valAxisLabelColor:MUTED});
+  }
+
+  const sentimentKeys=['welcomed','cellgroup_connection','presabbath_feeling','serving_supported'];
+  let qi=0;
   QUESTIONS.filter(q=>['select','chips','multichips','rating','wheel'].includes(q.type)).forEach(q=>{
     const answers=allAnswersFor(q.key);
     if(!answers.length) return;
     const counts=q.options.map(o=>answers.filter(a=>a.split(', ').includes(o)).length);
     const slide=pptx.addSlide();
-    slide.addText(q.label,{x:0.5,y:0.3,w:9,h:0.6,fontSize:16,bold:true});
-    slide.addChart(pptx.ChartType.bar,[{name:q.label,labels:q.options,values:counts}],{x:0.5,y:1,w:9,h:4.5,barDir:'bar'});
+    slide.background={color:BG};
+    const accent=PALETTE[qi%PALETTE.length];
+    const isSentiment=sentimentKeys.includes(q.key);
+    const barColors=isSentiment
+      ? q.options.map((_,i)=>warmCoolHex(q.options.length>1?i/(q.options.length-1):0))
+      : q.options.map(()=>accent);
+    slide.addShape(pptx.ShapeType.rect,{x:0,y:0,w:0.12,h:SLIDE_H,fill:{color:accent},line:{type:'none'}});
+    slide.addText(q.label,{x:0.5,y:0.3,w:9,h:0.6,fontSize:16,bold:true,color:INK});
+    slide.addChart(pptx.ChartType.bar,[{name:q.label,labels:q.options,values:counts}],
+      {x:0.5,y:1,w:9,h:4.5,barDir:'bar',chartColors:barColors,catAxisLabelColor:MUTED,valAxisLabelColor:MUTED});
+    qi++;
   });
 
   await pptx.writeFile({fileName:'Othandweni-Branch-Survey-Insights.pptx'});
