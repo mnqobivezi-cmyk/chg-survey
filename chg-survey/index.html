@@ -141,8 +141,8 @@ textarea::placeholder,input::placeholder{color:var(--muted)}
 .chart-title{font-size:11px;font-weight:600;color:var(--acc);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px}
 .bar-wrap{display:flex;flex-direction:column;gap:8px}
 .bar-row{display:flex;align-items:center;gap:8px}
-.bar-label{font-size:12px;color:var(--muted);width:170px;flex-shrink:0;line-height:1.3}
-.bar-track{flex:1;height:8px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden}
+.bar-label{font-size:12px;color:var(--muted);flex:0 1 42%;min-width:0;line-height:1.3}
+.bar-track{flex:1 1 30%;min-width:20px;height:8px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden}
 .bar-fill{height:100%;border-radius:4px;transition:width .6s cubic-bezier(.4,0,.2,1)}
 .bar-count{font-size:12px;color:var(--white);width:24px;text-align:right;flex-shrink:0}
 .donut-wrap{display:flex;align-items:center;gap:16px}
@@ -188,6 +188,47 @@ td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.05);color:var(--wh
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.09);border-radius:2px}
+
+/* ---- Admin dashboard: light theme (scoped, does not affect the survey) ---- */
+body.admin-theme{background:#f5f7fb}
+.admin-wrap{
+  --white:#1e2530;--muted:#8a94a6;--acc:#4f8ef7;--card:#ffffff;
+  background:#f5f7fb;
+}
+.admin-wrap .admin-header{border-bottom-color:rgba(20,30,50,.08)}
+.admin-wrap .logout-btn{border-color:rgba(20,30,50,.14);color:var(--muted)}
+.admin-wrap .tab-row{border-bottom-color:rgba(20,30,50,.08)}
+.admin-wrap .tab-btn{color:var(--muted)}
+.admin-wrap .stat-card,.admin-wrap .chart-card,.admin-wrap .sub-item,.admin-wrap .modal-card{
+  background:#ffffff;border:1px solid rgba(20,30,50,.06);
+  box-shadow:0 10px 28px rgba(31,41,55,.07),0 2px 6px rgba(31,41,55,.04);
+}
+.admin-wrap .stat-card:nth-of-type(1){background:linear-gradient(160deg,#eef4ff,#ffffff 65%)}
+.admin-wrap .stat-card:nth-of-type(2){background:linear-gradient(160deg,#eafaf3,#ffffff 65%)}
+.admin-wrap .chart-card:nth-of-type(6n+1){background:linear-gradient(160deg,#eef4ff,#ffffff 60%)}
+.admin-wrap .chart-card:nth-of-type(6n+2){background:linear-gradient(160deg,#fff1ec,#ffffff 60%)}
+.admin-wrap .chart-card:nth-of-type(6n+3){background:linear-gradient(160deg,#eafaf3,#ffffff 60%)}
+.admin-wrap .chart-card:nth-of-type(6n+4){background:linear-gradient(160deg,#fff8e6,#ffffff 60%)}
+.admin-wrap .chart-card:nth-of-type(6n+5){background:linear-gradient(160deg,#f3f0ff,#ffffff 60%)}
+.admin-wrap .chart-card:nth-of-type(6n+0){background:linear-gradient(160deg,#eef4ff,#ffffff 60%)}
+.admin-wrap .bar-track{background:rgba(20,30,50,.07)}
+.admin-wrap .filter-select{background:#ffffff;border-color:rgba(20,30,50,.14)}
+.admin-wrap .suburb-chip{background:#ffffff;border-color:rgba(20,30,50,.08)}
+.admin-wrap th{border-bottom-color:rgba(20,30,50,.1)}
+.admin-wrap td{border-bottom-color:rgba(20,30,50,.06)}
+.admin-wrap .detail-block{background:#f5f7fb}
+.admin-wrap .reflection-item{background:#f5f7fb;border-left-color:var(--acc)}
+.admin-wrap .export-btn{background:rgba(79,142,247,.08);border-color:rgba(79,142,247,.35);color:#3f6fd1}
+.admin-wrap .reset-btn{background:rgba(255,90,90,.08);border-color:rgba(255,90,90,.3);color:#e35555}
+.admin-wrap .pin-key{background:#f5f7fb;border-color:rgba(20,30,50,.1)}
+.admin-wrap .pin-key:active{background:#eef2f8}
+.admin-wrap .pin-dot{border-color:rgba(20,30,50,.18)}
+.admin-wrap .btn-secondary{border-color:rgba(20,30,50,.14)}
+.admin-wrap .btn-secondary:active{background:rgba(20,30,50,.05);color:var(--white)}
+.admin-wrap .ring{width:88px;height:88px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.admin-wrap .ring-inner{width:62px;height:62px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(20,30,50,.05)}
+.admin-wrap .ring-pct{font-size:17px;font-weight:700;color:var(--white)}
+.admin-wrap .ring-sub{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:1px}
 </style>
 </head>
 <body>
@@ -483,6 +524,7 @@ function failValidation(msg){
 /* ---------- render root ---------- */
 function render(){
   app.innerHTML='';
+  document.body.classList.toggle('admin-theme', S.mode==='admin'&&S.adminAuthed);
   let c;
   if(S.mode==='adminlogin') c=renderAdminLogin();
   else if(S.mode==='admin'&&S.adminAuthed) c=renderAdminDash();
@@ -1194,6 +1236,27 @@ function warmCool(t){
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 
+function donutChart(title,segments){
+  const total=segments.reduce((s,x)=>s+x.count,0);
+  let acc=0;
+  const stops=segments.filter(s=>s.count>0).map(s=>{
+    const pct=total?(s.count/total)*100:0;
+    const stop=s.color+' '+acc+'% '+(acc+pct)+'%';
+    acc+=pct;
+    return stop;
+  }).join(', ');
+  const ring=h('div',{'class':'ring','style':'background:conic-gradient('+(stops||'#e5e9f0 0% 100%')+')'},
+    h('div',{'class':'ring-inner'},h('div',{'class':'ring-pct'},total),h('div',{'class':'ring-sub'},'total'))
+  );
+  const legend=h('div',{'class':'donut-legend'},...segments.map(s=>
+    h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:'+s.color}),s.label+': '+s.count)
+  ));
+  return h('div',{'class':'chart-card'},
+    h('div',{'class':'chart-title'},title),
+    h('div',{'class':'donut-wrap'},ring,legend)
+  );
+}
+
 function barChart(title,options,counts,sentiment){
   const max=Math.max(1,...counts);
   return h('div',{'class':'chart-card'},
@@ -1247,6 +1310,28 @@ function renderInsightsTab(){
   frag.appendChild(h('div',{'style':'display:flex;gap:10px;margin-bottom:16px'},exportPptxBtn,exportXlsxBtn));
 
   const grid=h('div',{'class':'charts-grid'});
+  // gender donut (shown first)
+  const maleCount=S.data.respondents.filter(r=>r.gender==='Male').length;
+  const femaleCount=S.data.respondents.filter(r=>r.gender==='Female').length;
+  const genderUnknown=S.data.respondents.length-maleCount-femaleCount;
+  grid.appendChild(donutChart('Gender',[
+    {label:'Male',count:maleCount,color:'#4f8ef7'},
+    {label:'Female',count:femaleCount,color:'#ff8b73'},
+    {label:'Not specified',count:genderUnknown,color:'#c7cedb'}
+  ]));
+  // age demographics (shown first)
+  const ages=S.data.respondents.map(r=>computeAge(r.date_of_birth)).filter(a=>a!=null);
+  const ageCounts=AGE_BUCKETS.map(b=>ages.filter(b.test).length);
+  if(ages.length){
+    grid.appendChild(barChart('Age Demographics',AGE_BUCKETS.map(b=>b.label),ageCounts,false));
+  }
+  // knows cell group donut
+  const yes=S.data.respondents.filter(r=>r.knows_cell_group===true).length;
+  const no=S.data.respondents.filter(r=>r.knows_cell_group===false).length;
+  grid.appendChild(donutChart('Knows Their Cell Group',[
+    {label:'Yes',count:yes,color:'#2ec4a6'},
+    {label:'No',count:no,color:'#ff8b73'}
+  ]));
   const sentimentKeys=['welcomed','cellgroup_connection','presabbath_feeling','serving_supported'];
   QUESTIONS.filter(q=>['select','chips','multichips','rating','wheel'].includes(q.type)).forEach(q=>{
     const answers=allAnswersFor(q.key);
@@ -1254,34 +1339,6 @@ function renderInsightsTab(){
     const counts=q.options.map(o=>answers.filter(a=>a.split(', ').includes(o)).length);
     grid.appendChild(barChart(q.label,q.options,counts,sentimentKeys.includes(q.key)));
   });
-  // knows cell group donut
-  const yes=S.data.respondents.filter(r=>r.knows_cell_group===true).length;
-  const no=S.data.respondents.filter(r=>r.knows_cell_group===false).length;
-  grid.appendChild(h('div',{'class':'chart-card'},
-    h('div',{'class':'chart-title'},'Knows Their Cell Group'),
-    h('div',{'class':'donut-legend'},
-      h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#7ecfdc'}),'Yes: '+yes),
-      h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#e8a79d'}),'No: '+no)
-    )
-  ));
-  // gender donut
-  const maleCount=S.data.respondents.filter(r=>r.gender==='Male').length;
-  const femaleCount=S.data.respondents.filter(r=>r.gender==='Female').length;
-  const genderUnknown=S.data.respondents.length-maleCount-femaleCount;
-  grid.appendChild(h('div',{'class':'chart-card'},
-    h('div',{'class':'chart-title'},'Gender'),
-    h('div',{'class':'donut-legend'},
-      h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#7ecfdc'}),'Male: '+maleCount),
-      h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#e8a79d'}),'Female: '+femaleCount),
-      genderUnknown?h('div',{'class':'legend-row'},h('div',{'class':'legend-dot','style':'background:#888'}),'Not specified: '+genderUnknown):null
-    )
-  ));
-  // age demographics
-  const ages=S.data.respondents.map(r=>computeAge(r.date_of_birth)).filter(a=>a!=null);
-  const ageCounts=AGE_BUCKETS.map(b=>ages.filter(b.test).length);
-  if(ages.length){
-    grid.appendChild(barChart('Age Demographics',AGE_BUCKETS.map(b=>b.label),ageCounts,false));
-  }
   frag.appendChild(grid);
 
   const textKeys=['connection_help','presabbath_improve','pastoral_note','feedback_good','feedback_improve','feedback_other','fellowship_suggestions','serving_other'];
