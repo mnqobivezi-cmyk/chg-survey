@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Sunrise Alarm</title>
+<style>
+  :root { --bg:#05060a; --fg:#f3e9dc; --muted:#9a8f84; --accent:#ffb347; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  #setup { min-height:100%; display:flex; flex-direction:column; justify-content:center;
+    gap:20px; padding:24px 16px; max-width:420px; margin:0 auto; }
+  h1 { font-size:26px; margin:0; font-weight:600; }
+  p.sub { margin:0; color:var(--muted); font-size:14px; line-height:1.45; }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
+  input[type=time], select { width:100%; font-size:22px; padding:12px; border-radius:12px;
+    border:1px solid #2a2d38; background:#12141b; color:var(--fg); }
+  .row { display:flex; gap:12px; } .row > div { flex:1; }
+  button { font:inherit; font-size:17px; padding:14px; border-radius:14px; border:0;
+    background:var(--accent); color:#2a1700; font-weight:600; width:100%; }
+  button.ghost { background:#12141b; color:var(--fg); border:1px solid #2a2d38; }
+  .check { display:flex; align-items:center; gap:10px; font-size:15px; }
+  .check input { width:22px; height:22px; accent-color:var(--accent); }
+  .tips { font-size:12.5px; color:var(--muted); line-height:1.5; }
+  #stage { position:fixed; inset:0; display:none; overflow:hidden; background:#000; touch-action:manipulation; }
+  #sky, #sun, #dim { position:absolute; inset:0; }
+  #sun { will-change:transform,opacity; }
+  #dim { background:#000; pointer-events:none; }
+  #clock { position:absolute; left:0; right:0; top:14%; text-align:center; font-size:64px;
+    font-weight:200; letter-spacing:2px; color:rgba(255,255,255,.55); mix-blend-mode:screen; }
+  #status { position:absolute; left:0; right:0; bottom:calc(env(safe-area-inset-bottom) + 28px);
+    text-align:center; font-size:13px; color:rgba(255,255,255,.35); }
+</style>
+</head>
+<body>
+<div id="setup">
+  <h1>🌅 Sunrise Alarm</h1>
+  <p class="sub">Your screen slowly glows from deep red to warm gold to bright daylight, so you wake up gradually.</p>
+  <div class="row">
+    <div><label for="wake">Wake up at</label><input id="wake" type="time" value="07:00"></div>
+    <div><label for="dur">Sunrise length</label>
+      <select id="dur">
+        <option value="10">10 min</option><option value="20">20 min</option>
+        <option value="30" selected>30 min</option><option value="45">45 min</option>
+        <option value="60">60 min</option>
+      </select></div>
+  </div>
+  <label class="check"><input id="chime" type="checkbox" checked> Soft chime at wake-up time</label>
+  <button id="start">Start tonight</button>
+  <button id="preview" class="ghost">Preview (1 minute)</button>
+  <p class="tips">
+    Before sleeping: plug in your phone, set screen brightness to maximum, turn on Do Not Disturb,
+    and keep this page open. Tap the screen to stop. Add it to your Home screen (Chrome menu →
+    Add to Home screen) for a full-screen app.
+  </p>
+</div>
+
+<div id="stage">
+  <div id="sky"></div>
+  <div id="sun"></div>
+  <div id="dim"></div>
+  <div id="clock"></div>
+  <div id="status"></div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const stage = $('stage'), sky = $('sky'), sun = $('sun'), dim = $('dim'),
+        clock = $('clock'), status = $('status');
+
+  // Sunrise colour stops: [progress, bottom, middle, top]
+  const STOPS = [
+    [0.00, [0,0,0],       [0,0,0],       [0,0,0]],
+    [0.12, [70,8,4],      [18,3,6],      [3,2,8]],
+    [0.30, [190,50,10],   [90,22,24],    [18,10,40]],
+    [0.50, [255,120,30],  [210,80,60],   [70,50,110]],
+    [0.72, [255,185,80],  [255,150,100], [150,140,200]],
+    [0.90, [255,225,150], [255,215,170], [190,210,245]],
+    [1.00, [255,244,214], [255,240,225], [205,228,255]],
+  ];
+  const lerp = (a,b,t) => a + (b-a)*t;
+  const mix = (c1,c2,t) => c1.map((v,i) => Math.round(lerp(v,c2[i],t)));
+  const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+  const ease = t => t*t*(3-2*t);
+
+  function colours(p) {
+    for (let i = 1; i < STOPS.length; i++) {
+      if (p <= STOPS[i][0]) {
+        const a = STOPS[i-1], b = STOPS[i];
+        const t = (p - a[0]) / (b[0] - a[0]);
+        return [mix(a[1],b[1],t), mix(a[2],b[2],t), mix(a[3],b[3],t)];
+      }
+    }
+    const l = STOPS[STOPS.length-1]; return [l[1], l[2], l[3]];
+  }
+
+  let run = null, wakeLock = null, raf = 0, audio = null, chimed = false;
+
+  function render(p, now) {
+    const e = ease(Math.min(Math.max(p,0),1));
+    const [bot, mid, top] = colours(e);
+    sky.style.background = `linear-gradient(to top, ${rgb(bot)} 0%, ${rgb(mid)} 45%, ${rgb(top)} 100%)`;
+    // Sun disc rises from below the bottom edge toward the middle and its glow grows.
+    const y = lerp(120, 38, e);                       // % from top
+    const r = lerp(18, 85, e);                        // glow radius in vmax-ish %
+    const core = [255, Math.round(lerp(120,250,e)), Math.round(lerp(40,210,e))];
+    sun.style.background =
+      `radial-gradient(circle at 50% ${y}%, rgba(${core},${Math.min(1, e*1.6)}) 0%, ` +
+      `rgba(${core},${0.55*e}) ${r*0.35}%, rgba(${core},0) ${r}%)`;
+    // Very first minutes: fade up from pure black so it's never a sudden flash.
+    dim.style.opacity = String(Math.max(0, 1 - Math.min(1, p*12)));
+    const d = new Date(now);
+    clock.textContent = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    clock.style.opacity = p > 0 ? 1 : 0.35;
+    const late = p > 0.7;
+    clock.style.color = late ? 'rgba(90,60,30,.6)' : 'rgba(255,255,255,.55)';
+    clock.style.mixBlendMode = late ? 'normal' : 'screen';
+    status.style.color = late ? 'rgba(90,60,30,.5)' : 'rgba(255,255,255,.35)';
+  }
+
+  function fmt(ms) {
+    const m = Math.ceil(ms/60000);
+    return m >= 60 ? `${Math.floor(m/60)}h ${m%60}m` : `${m} min`;
+  }
+
+  function tick() {
+    if (!run) return;
+    const now = Date.now();
+    const p = (now - run.start) / (run.end - run.start);
+    if (now < run.start) {
+      render(0, now);
+      status.textContent = `Sunrise starts in ${fmt(run.start - now)} · tap to cancel`;
+    } else {
+      render(p, now);
+      status.textContent = p < 1 ? `Sunrise in progress · tap to stop` : `Good morning ☀️ · tap to close`;
+    }
+    if (now >= run.end && run.chime && !chimed) { chimed = true; playChime(); }
+    raf = requestAnimationFrame(tick);
+  }
+
+  async function lockScreen() {
+    try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (run && document.visibilityState === 'visible') lockScreen();
+  });
+
+  async function enterFullscreen() {
+    try { await (stage.requestFullscreen && stage.requestFullscreen({navigationUI:'hide'})); } catch (_) {}
+  }
+
+  function playChime() {
+    try {
+      const ctx = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      let t = ctx.currentTime;
+      // Repeat the arpeggio, getting gradually louder.
+      for (let rep = 0; rep < 12; rep++) {
+        const vol = Math.min(0.5, 0.02 + rep * 0.04);
+        notes.forEach((f, i) => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.type = 'sine'; o.frequency.value = f;
+          const s = t + i*0.5;
+          g.gain.setValueAtTime(0, s);
+          g.gain.linearRampToValueAtTime(vol, s + 0.08);
+          g.gain.exponentialRampToValueAtTime(0.0001, s + 1.6);
+          o.connect(g).connect(ctx.destination); o.start(s); o.stop(s + 1.7);
+        });
+        t += 4;
+      }
+    } catch (_) {}
+  }
+
+  async function begin(startMs, endMs, chime) {
+    run = {start: startMs, end: endMs, chime};
+    chimed = false;
+    // Creating the AudioContext inside the user gesture lets it play later.
+    if (chime) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} }
+    $('setup').style.display = 'none';
+    stage.style.display = 'block';
+    await enterFullscreen();
+    await lockScreen();
+    cancelAnimationFrame(raf); tick();
+  }
+
+  function stop() {
+    run = null; cancelAnimationFrame(raf);
+    if (wakeLock) { try { wakeLock.release(); } catch (_) {} wakeLock = null; }
+    if (audio) { try { audio.close(); } catch (_) {} audio = null; }
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    stage.style.display = 'none';
+    $('setup').style.display = 'flex';
+  }
+  stage.addEventListener('click', stop);
+
+  function save() {
+    try { localStorage.setItem('sunrise', JSON.stringify(
+      {wake: $('wake').value, dur: $('dur').value, chime: $('chime').checked})); } catch (_) {}
+  }
+  try {
+    const s = JSON.parse(localStorage.getItem('sunrise') || 'null');
+    if (s) { $('wake').value = s.wake; $('dur').value = s.dur; $('chime').checked = s.chime; }
+  } catch (_) {}
+
+  $('start').addEventListener('click', () => {
+    save();
+    const [h, m] = $('wake').value.split(':').map(Number);
+    const wake = new Date(); wake.setHours(h, m, 0, 0);
+    if (wake.getTime() <= Date.now() + 1000) wake.setDate(wake.getDate() + 1);
+    const dur = Number($('dur').value) * 60000;
+    begin(wake.getTime() - dur, wake.getTime(), $('chime').checked);
+  });
+
+  $('preview').addEventListener('click', () => {
+    const now = Date.now();
+    begin(now, now + 60000, false);
+  });
+})();
+</script>
+</body>
+</html>
